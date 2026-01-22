@@ -2,10 +2,10 @@
 """Minimal TextualApp example.
 
 Run with:
-    python -m genro_pygui.cli run examples/basic/hello_world.py
+    python -m genro_textual.cli run examples/basic/hello_world.py
 """
 
-from genro_pygui import TextualApp
+from genro_textual import TextualApp
 
 
 class Application(TextualApp):

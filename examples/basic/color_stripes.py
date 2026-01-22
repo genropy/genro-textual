@@ -7,7 +7,7 @@ Run with:
 Shows how to create multiple Static widgets with different colors.
 """
 
-from genro_pygui import TextualApp
+from genro_textual import TextualApp
 
 
 class Application(TextualApp):

@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 # Registry file in user's temp directory with restricted permissions
-REGISTRY_DIR = Path(tempfile.gettempdir()) / f"genro_pygui_{os.getuid()}"
+REGISTRY_DIR = Path(tempfile.gettempdir()) / f"genro_textual_{os.getuid()}"
 REGISTRY_FILE = REGISTRY_DIR / "registry.json"
 
 

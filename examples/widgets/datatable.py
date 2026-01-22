@@ -7,7 +7,7 @@ Run with:
 Shows how to create a DataTable with column and row definitions.
 """
 
-from genro_pygui import TextualApp
+from genro_textual import TextualApp
 
 
 class Application(TextualApp):

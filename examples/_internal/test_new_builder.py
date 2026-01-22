@@ -8,7 +8,8 @@ Run with:
 from __future__ import annotations
 
 from genro_bag import Bag
-from genro_pygui.textual_builder import TextualBuilder
+
+from genro_textual.textual_builder import TextualBuilder
 
 
 def test_schema():

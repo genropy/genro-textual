@@ -7,7 +7,7 @@ ma costruita con BagApp.
 Esegui con: python 01_hello_world.py
 """
 
-from genro_pygui import BagApp
+from genro_textual import TextualApp
 
 
 class MyApp(BagApp):

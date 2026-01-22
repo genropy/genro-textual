@@ -5,7 +5,7 @@ Server side (in TextualApp):
     app.enable_remote(port=9999)
 
 Client side:
-    from genro_pygui.remote import connect
+    from genro_textual.remote import connect
     app = connect()
     app.page.static("Hello!")
 
@@ -27,7 +27,7 @@ import threading
 from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
-    from genro_pygui.textual_app import TextualApp
+    from genro_textual.textual_app import TextualApp
 
 # Frame format: 4-byte length prefix (big-endian)
 FRAME_HEADER_SIZE = 4
@@ -130,7 +130,7 @@ def connect(
 ) -> RemoteProxy:
     """Connect to a remote TextualApp by name or port."""
     if name is not None:
-        from genro_pygui.registry import get_app_info
+        from genro_textual.registry import get_app_info
 
         info = get_app_info(name)
         if info is None:

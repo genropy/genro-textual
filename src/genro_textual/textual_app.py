@@ -12,7 +12,7 @@ compile() transforms the recipe into Textual widgets ONCE.
 Textual's compose() just yields the cached widgets.
 
 Example:
-    from genro_pygui import TextualApp
+    from genro_textual import TextualApp
 
     class MyApp(TextualApp):
         def recipe(self, root):
@@ -35,10 +35,10 @@ from textual.containers import Vertical
 from textual.widget import Widget
 from textual.widgets import Button
 
-from genro_pygui.textual_builder import TextualBuilder
+from genro_textual.textual_builder import TextualBuilder
 
 if TYPE_CHECKING:
-    from genro_pygui.remote import RemoteServer
+    from genro_textual.remote import RemoteServer
 
 
 class TextualWrapperApp(App):
@@ -106,7 +106,7 @@ class TextualApp:
 
     def _enable_remote(self, port: int) -> None:
         """Enable remote control via socket."""
-        from genro_pygui.remote import RemoteServer
+        from genro_textual.remote import RemoteServer
 
         self._remote_server = RemoteServer(self, port)
         self._remote_server.start()

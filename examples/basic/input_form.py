@@ -9,7 +9,7 @@ Shows Input widgets with placeholders.
 
 from textual.widgets import Input
 
-from genro_pygui import TextualApp
+from genro_textual import TextualApp
 
 
 class Application(TextualApp):

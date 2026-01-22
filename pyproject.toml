@@ -4,9 +4,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "genro-pygui"
+name = "genro-textual"
 version = "0.1.0"
-description = "Terminal UI for Genro Bag visualization and interaction"
+description = "Textual UI framework for Genro Bag-driven applications"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.11"
@@ -35,14 +35,14 @@ dev = [
 ]
 
 [project.scripts]
-textual = "genro_pygui.cli:main"
+pygui = "genro_textual.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/genropy/genro-pygui"
-Repository = "https://github.com/genropy/genro-pygui"
+Homepage = "https://github.com/genropy/genro-textual"
+Repository = "https://github.com/genropy/genro-textual"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/genro_pygui"]
+packages = ["src/genro_textual"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

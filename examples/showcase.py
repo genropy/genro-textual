@@ -5,7 +5,7 @@ Run with:
     textual run examples/showcase.py
 """
 
-from genro_pygui import TextualApp
+from genro_textual import TextualApp
 
 
 class Application(TextualApp):

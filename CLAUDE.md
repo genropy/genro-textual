@@ -1,4 +1,4 @@
-# Claude Code Instructions - genro-pygui
+# Claude Code Instructions - genro-textual
 
 **Parent Document**: This project follows all policies from the central [meta-genro-modules CLAUDE.md](https://github.com/softwellsrl/meta-genro-modules/blob/main/CLAUDE.md)
 
@@ -9,7 +9,7 @@
 - Has Implementation: Yes (POC phase)
 
 ### Project Description
-Terminal UI for Genro Bag visualization and interaction, built with Textual.
+Textual UI framework for Genro Bag-driven applications.
 
 ### Dependencies
 - `genro-bag`: Core Bag implementation

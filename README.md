@@ -1,6 +1,6 @@
-# genro-pygui
+# genro-textual
 
-Terminal UI for Genro Bag visualization and interaction, built with [Textual](https://textual.textualize.io/).
+Textual UI framework for Genro Bag-driven applications, built with [Textual](https://textual.textualize.io/).
 
 ## Status
 
@@ -8,42 +8,61 @@ Terminal UI for Genro Bag visualization and interaction, built with [Textual](ht
 
 ## Purpose
 
-Provide a terminal-based interface to:
-- Visualize Bag structures as interactive trees
-- Edit values and attributes in real-time
-- Observe reactive updates (subscriptions, FormulaResolver)
-- Debug and explore Bag hierarchies
+Provide a declarative, Bag-driven framework for building terminal UIs:
+- Define UI as a "recipe" using Bag methods
+- Automatic compilation to Textual widgets
+- Remote control via REPL
+- Live updates and hot reload
 
 ## Installation
 
 ```bash
-pip install genro-pygui
+pip install genro-textual
 ```
 
 ## Quick Start
 
 ```python
-from genro_bag import Bag
-from genro_pygui import BagViewer
+from genro_textual import TextualApp
 
-bag = Bag()
-bag['cliente.nome'] = 'Mario'
-bag['cliente.cognome'] = 'Rossi'
-bag['ordini.0.prodotto'] = 'Widget'
-bag['ordini.0.qta'] = 10
+class Application(TextualApp):
+    def recipe(self, root):
+        root.static("Hello, Textual!")
+        root.button("Click me", variant="primary")
 
-# Launch terminal viewer
-BagViewer(bag).run()
+if __name__ == "__main__":
+    Application().run()
 ```
 
-## Features (Planned)
+## CLI
 
-- [ ] Tree view of Bag structure
-- [ ] Value/attribute display
-- [ ] Live updates via subscription
-- [ ] Inline editing
-- [ ] FormulaResolver visualization
-- [ ] Search/filter
+```bash
+# Run an app
+pygui run examples/basic/hello_world.py
+
+# Run with auto-reload
+pygui run examples/basic/hello_world.py -r
+
+# Run and connect REPL
+pygui run examples/basic/hello_world.py -c
+
+# List running apps
+pygui list
+
+# Connect to running app
+pygui connect hello_world
+```
+
+## Features
+
+- [x] Declarative UI with Bag
+- [x] All Textual widgets supported
+- [x] TabbedContent/TabPane
+- [x] DataTable with columns/rows
+- [x] Remote REPL control
+- [x] Hot reload
+- [ ] Data binding
+- [ ] FormulaResolver integration
 
 ## License
 

@@ -9,7 +9,7 @@ Shows all Button variants: default, primary, success, warning, error.
 
 from textual.widgets import Button
 
-from genro_pygui import TextualApp
+from genro_textual import TextualApp
 
 
 class Application(TextualApp):

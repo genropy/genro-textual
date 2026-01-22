@@ -3,7 +3,7 @@
 
 from textual.app import App
 from textual.containers import Vertical
-from textual.widgets import Static, Button
+from textual.widgets import Button, Static
 
 
 class TestMountApp(App):

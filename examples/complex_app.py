@@ -11,7 +11,7 @@ Connect with REPL:
 
 from __future__ import annotations
 
-from genro_pygui import TextualApp
+from genro_textual import TextualApp
 
 
 class Application(TextualApp):

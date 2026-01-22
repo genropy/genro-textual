@@ -18,7 +18,7 @@ import subprocess
 import sys
 import time
 
-from genro_pygui.registry import (
+from genro_textual.registry import (
     find_free_port,
     get_app_info,
     list_apps,
@@ -55,7 +55,7 @@ def run_app(file_path: str, connect: bool = False, reload: bool = False) -> None
         env = os.environ.copy()
         env["PYTHONPATH"] = os.pathsep.join(sys.path)
         subprocess.Popen(
-            [sys.executable, "-m", "genro_pygui.cli", "run", file_path],
+            [sys.executable, "-m", "genro_textual.cli", "run", file_path],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             env=env,
@@ -116,7 +116,7 @@ def connect_repl(name: str) -> None:
         print(f"App '{name}' not found")
         sys.exit(1)
 
-    from genro_pygui.remote import connect
+    from genro_textual.remote import connect
 
     app = connect(name=name)
     port = info["port"]

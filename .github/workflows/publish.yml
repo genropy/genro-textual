@@ -39,7 +39,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     environment:
       name: release
-      url: https://pypi.org/p/genro-pygui
+      url: https://pypi.org/p/genro-textual
     permissions:
       id-token: write  # REQUIRED for Trusted Publisher
 

@@ -5,7 +5,7 @@ Run with CLI:
     textual run examples/basic/nested_containers.py
 """
 
-from genro_pygui import TextualApp
+from genro_textual import TextualApp
 
 
 class Application(TextualApp):

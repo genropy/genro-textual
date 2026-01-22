@@ -7,7 +7,7 @@ Run with:
 Use the remote REPL to add widgets dynamically.
 """
 
-from genro_pygui import TextualApp
+from genro_textual import TextualApp
 
 
 class Application(TextualApp):

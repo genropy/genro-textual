@@ -7,7 +7,7 @@ Run with:
 Shows how to create tabbed interfaces with TabbedContent and TabPane.
 """
 
-from genro_pygui import TextualApp
+from genro_textual import TextualApp
 
 
 class Application(TextualApp):
@@ -27,7 +27,7 @@ class Application(TextualApp):
         # Tab 1: Overview
         overview = tabs.tabpane(title="Overview", id="overview")
         overview.static("Welcome to the TabbedContent Example", classes="tab-title")
-        overview.static("This demonstrates how to use tabs in genro-pygui.")
+        overview.static("This demonstrates how to use tabs in genro-textual.")
         overview.static("Use Tab/Shift-Tab or click to switch tabs.")
 
         # Tab 2: Features
