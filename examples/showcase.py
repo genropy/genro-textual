@@ -11,17 +11,17 @@ from genro_textual import TextualApp
 class Application(TextualApp):
     """All examples in tabs."""
 
-    CSS = """
-    .stripe-red { background: red; }
-    .stripe-orange { background: orange; }
-    .stripe-yellow { background: yellow; color: black; }
-    .stripe-green { background: green; }
-    .stripe-blue { background: blue; }
-    .stripe-purple { background: purple; }
-    """
+    def recipe(self, page):
+        page.css("""
+            .stripe-red { background: red; }
+            .stripe-orange { background: orange; }
+            .stripe-yellow { background: yellow; color: black; }
+            .stripe-green { background: green; }
+            .stripe-blue { background: blue; }
+            .stripe-purple { background: purple; }
+        """)
 
-    def recipe(self, root):
-        tabs = root.tabbedcontent(id="examples")
+        tabs = page.tabbedcontent(id="examples")
 
         # Tab 1: Hello World
         tab1 = tabs.tabpane(title="Hello World", id="tab-hello")
@@ -48,5 +48,3 @@ class Application(TextualApp):
         tab4.input(placeholder="First Name", id="first_name")
         tab4.input(placeholder="Last Name", id="last_name")
         tab4.input(placeholder="Email", id="email")
-
-

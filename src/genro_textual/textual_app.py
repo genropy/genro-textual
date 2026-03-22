@@ -1,108 +1,201 @@
 # Copyright 2025 Softwell S.r.l. - SPDX-License-Identifier: Apache-2.0
-"""TextualApp - Base class for Textual apps built with Bag.
+"""TextualApp - Reactive Textual app driven by CompiledBag.
 
-Workflow:
-    1. App instantiated → creates _page (recipe Bag) and _data (data Bag)
-    2. recipe(root) → populates the recipe Bag (the "human-readable recipe")
-    3. run() → compiles the recipe and starts Textual
-    4. Textual calls App.compose() → yields the pre-compiled widgets
+Architecture: puppeteer and puppet.
 
-IMPORTANT: recipe() is called ONCE at instantiation to create the recipe.
-compile() transforms the recipe into Textual widgets ONCE.
-Textual's compose() just yields the cached widgets.
+    TextualApp (BagAppBase) is the puppeteer — configures recipe, data,
+    compiler. Creates and drives the LiveApp.
+
+    LiveApp (textual.app.App) is the puppet — no logic of its own.
+    Built and controlled by the puppeteer.
+
+Everything goes through the Bag: CSS, bindings, widgets — all declared
+in the recipe as nodes. The compiler extracts app config (css, binding)
+and applies it to the LiveApp, then mounts widgets.
+
+Lifecycle:
+    1. TextualApp() → BagAppBase.__init__()
+    2. run() → creates LiveApp, starts Textual event loop
+    3. LiveApp.on_mount() → setup() = recipe + compile + bind + render
+    4. Data changes → BindingManager updates node → widget update
+    5. Widget changes → _on_widget_changed → data update (bidirectional)
 
 Example:
     from genro_textual import TextualApp
 
     class MyApp(TextualApp):
-        def recipe(self, root):
-            root.static("Hello, Textual!")
-            tabs = root.tabbedcontent()
-            tab1 = tabs.tabpane("Tab 1")
-            tab1.button("Click me")
+        def recipe(self, page):
+            page.css(".title { color: green; }")
+            page.binding(key="q", action="quit", description="Quit")
+            page.static("Hello!", classes="title")
 
     if __name__ == "__main__":
         MyApp().run()
 """
-
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from genro_bag import Bag
+from genro_bag import Bag, BagNode
+from genro_builders.app import BagAppBase
+from genro_builders.builder_bag import BuilderBag
 from textual.app import App
 from textual.containers import Vertical
-from textual.widget import Widget
-from textual.widgets import Button
+from textual.widgets import Button, Checkbox, Input, Static, Switch
 
 from genro_textual.textual_builder import TextualBuilder
+from genro_textual.textual_compiler import TextualCompiler
 
 if TYPE_CHECKING:
     from genro_textual.remote import RemoteServer
 
 
-class TextualWrapperApp(App):
-    """Internal Textual App that wraps TextualApp."""
+class LiveApp(App):
+    """The puppet: a bare textual.app.App driven by TextualApp.
+
+    Has no CSS or BINDINGS of its own — those come from the recipe
+    and are applied by the compiler at render time.
+    Delegates all events to the owner (TextualApp).
+    """
 
     BINDINGS = [("q", "quit", "Quit")]
 
-    def __init__(self, owner: "TextualApp") -> None:
+    def __init__(self, owner: TextualApp) -> None:
         super().__init__()
         self.owner = owner
-        self.root = None
+        self.root: Vertical | None = None
 
     def compose(self):
         self.root = Vertical(id="root")
         return [self.root]
 
     def on_mount(self) -> None:
-        self.owner._page.builder.compile(self.owner._page, self.root)
+        self.owner.setup()
+
+    # --- Event delegation to owner ---
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        pass
+        handler = getattr(self.owner, "on_button_pressed", None)
+        if handler:
+            handler(event)
 
-    def on_key(self, event: any) -> None:
-        pass
+    def on_key(self, event: Any) -> None:
+        handler = getattr(self.owner, "on_key", None)
+        if handler:
+            handler(event)
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        self.owner._on_widget_changed(event.input, event.value)
+        handler = getattr(self.owner, "on_input_changed", None)
+        if handler:
+            handler(event)
+
+    def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
+        self.owner._on_widget_changed(event.checkbox, event.value)
+        handler = getattr(self.owner, "on_checkbox_changed", None)
+        if handler:
+            handler(event)
+
+    def on_switch_changed(self, event: Switch.Changed) -> None:
+        self.owner._on_widget_changed(event.switch, event.value)
+        handler = getattr(self.owner, "on_switch_changed", None)
+        if handler:
+            handler(event)
 
 
-class TextualApp:
-    """Base class for Textual apps built with Bag.
+class TextualApp(BagAppBase):
+    """The puppeteer: configures and drives a LiveApp.
 
-    Subclass and override recipe(root) to define your UI.
-    The root is a Bag with TextualBuilder - use it to add widgets.
+    Subclass and override recipe(page) to define your UI.
+    Everything goes in the recipe: widgets, CSS, bindings.
     """
 
+    builder_class = TextualBuilder
+    compiler_class = TextualCompiler
+
     def __init__(self, remote_port: int | None = None) -> None:
-        self._page = Bag(builder=TextualBuilder)
-        self._data = Bag()
+        super().__init__()
         self._remote_server: RemoteServer | None = None
         self._remote_port = remote_port
-        self._compiled_widgets: list[Widget] = []
-        self._textual_app: App | None = None
-        self.recipe(self._page)
+        self._live_app: LiveApp | None = None
+        self._updating_from_widget = False
 
     @property
-    def page(self) -> Bag:
+    def page(self) -> BuilderBag:
         """The page Bag (UI structure)."""
-        return self._page
+        return self._store
 
     @property
     def data(self) -> Bag:
-        """The data Bag (application data)."""
+        """The data Bag. Setting values triggers reactive updates."""
         return self._data
 
-    def recipe(self, root: Bag) -> None:
-        """Override this method to build your UI.
+    @data.setter
+    def data(self, value: Bag | dict[str, Any]) -> None:
+        """Replace data entirely. Delegates to BagAppBase."""
+        BagAppBase.data.fset(self, value)
 
-        Args:
-            root: The page Bag. Add widgets by calling methods on it.
+    def recipe(self, page: BuilderBag) -> None:
+        """Override to build your UI. page is a BuilderBag with TextualBuilder."""
+
+    def render(self, compiled_bag: Bag) -> None:
+        """Mount widgets from CompiledBag into the LiveApp."""
+        if self._live_app is None or self._live_app.root is None:
+            return None
+        self._live_app.root.remove_children()
+        self._compiler.render(compiled_bag, self._live_app)
+        return None
+
+    def _on_node_updated(self, node: BagNode) -> None:
+        """Called by BindingManager when a bound node changes.
+
+        Uses call_from_thread for thread safety — the binding callback
+        may arrive from a different thread (remote, timer).
+        Updates the specific widget, not the entire tree.
         """
+        if self._updating_from_widget or not self._auto_compile:
+            return
+        widget = node.compiled.get("widget")
+        if widget is None:
+            return
+        if self._live_app is not None:
+            self._live_app.call_from_thread(self._update_widget, node, widget)
+        else:
+            self._update_widget(node, widget)
 
+    def _update_widget(self, node: BagNode, widget: Any) -> None:
+        """Apply node value/attr changes to the Textual widget."""
+        value = node.value
+        if isinstance(widget, Static):
+            widget.update(str(value) if value is not None else "")
+        elif isinstance(widget, Input):
+            widget.value = str(value) if value is not None else ""
+        elif isinstance(widget, (Checkbox, Switch)):
+            widget.value = bool(value)
+        elif hasattr(widget, "label"):
+            widget.label = str(value) if value is not None else ""
+
+    def _on_widget_changed(self, widget: Any, value: Any) -> None:
+        """Called by LiveApp when a widget value changes (bidirectional binding).
+
+        Writes the new value back to the data Bag. The _updating_from_widget
+        flag prevents the loop: widget→data→binding→widget.
+        """
+        node = getattr(widget, "_bag_node", None)
+        if node is None:
+            return
+        bindings = node.compiled.get("bindings", [])
+        for b in bindings:
+            if b["location"] == "value":
+                self._updating_from_widget = True
+                node.set_relative_data(self.data, b["pointer_info"].raw[1:], value)
+                self._updating_from_widget = False
+                break
 
     def run(self) -> None:
         """Run the Textual app."""
-        self._textual_app = TextualWrapperApp(self)
-        self._textual_app.run()
+        self._live_app = LiveApp(self)
+        self._live_app.run()
 
     def _enable_remote(self, port: int) -> None:
         """Enable remote control via socket."""

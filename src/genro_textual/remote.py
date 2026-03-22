@@ -233,7 +233,7 @@ class RemoteServer:
 
     def _safe_call(self, func: Callable[[], Any]) -> Any:
         """Execute function in Textual's main thread and return result."""
-        textual_app = self._app._textual_app
+        textual_app = self._app._live_app
         if textual_app is None:
             return func()
         return textual_app.call_from_thread(func)

@@ -1,40 +1,24 @@
 # Copyright 2025 Softwell S.r.l. - SPDX-License-Identifier: Apache-2.0
 """TextualBuilder - Builder for Textual TUI widgets.
 
-Auto-generated element methods for all Textual widgets.
-Each method is decorated with @element and has proper sub_tags and typed parameters.
-"""
+Elements and components are defined in TextualWidgetsMixin so that
+subclasses of TextualBuilder inherit the full schema. This follows
+the genro-builders mixin pattern: _pop_decorated_methods collects
+decorators from mixin bases (non-BagBuilderBase) in the MRO.
 
+No rendering logic here — that belongs in TextualCompiler.
+"""
 from __future__ import annotations
 
-import inspect
-from importlib import import_module
-from typing import TYPE_CHECKING, Any
-
-from genro_bag import Bag
-from genro_bag.builder import BagBuilderBase, element
-from textual.widget import Widget
-
-if TYPE_CHECKING:
-    from genro_bag.bagnode import BagNode
+from genro_builders.builder import BagBuilderBase, component, element
 
 
-class TextualBuilder(BagBuilderBase):
-    """Builder for Textual TUI elements.
+class TextualWidgetsMixin:
+    """All Textual widget @element and @component definitions.
 
-    All standard Textual widgets are available as methods.
+    Defined as a mixin so that subclasses of TextualBuilder
+    automatically inherit the full schema via MRO.
     """
-
-    def __init__(self, bag: Bag) -> None:
-        super().__init__(bag)
-        self._widget_counter = 0
-
-    @property
-    def widget_counter(self) -> int:
-        """Return current counter and auto-increment for next widget."""
-        current = self._widget_counter
-        self._widget_counter += 1
-        return current
 
     # -------------------------------------------------------------------------
     # Container elements (from textual.containers)
@@ -360,12 +344,10 @@ class TextualBuilder(BagBuilderBase):
     def progressbar(
         self,
         content: str = "",
-        total: str | None = None,
+        total: float | int | None = None,
         show_bar: bool = True,
         show_percentage: bool = True,
         show_eta: bool = True,
-        clock: str | None = None,
-        gradient: str | None = None,
     ):
         """A progress bar widget."""
         ...
@@ -524,216 +506,50 @@ class TextualBuilder(BagBuilderBase):
         ...
 
     # -------------------------------------------------------------------------
-    # Compile: transform Bag to Textual widgets using mount()
+    # App configuration elements (not rendered as widgets)
     # -------------------------------------------------------------------------
 
-    def compile(self, bag: Bag, parent_widget: Widget) -> None:
-        """Compile a Bag to Textual widgets, mounting them to parent."""
-        for node in bag:
-            self._compile_node(node, parent_widget)
+    @element(sub_tags="")
+    def css(self, content: str = ""):
+        """CSS stylesheet applied to the live app."""
+        ...
 
-    def _compile_node(self, node: BagNode, parent_widget: Widget) -> None:
-        """Compile a single node and mount it to parent."""
-        tag = node.tag or "static"
-
-        # Check for dedicated compile method _compile_<tag>
-        compile_method = getattr(self, f"_compile_{tag}", None)
-        if compile_method:
-            compile_method(node, parent_widget)
-            return
-
-        attr = dict(node.attr)
-
-        schema_info = self.get_schema_info(tag)
-        compile_kwargs = schema_info.get("compile_kwargs", {})
-
-        module_name = compile_kwargs.get("module", "textual.widgets")
-        class_name = compile_kwargs.get("class")
-
-        if class_name is None:
-            raise ValueError(f"Element '{tag}' missing compile_class in schema")
-
-        module = import_module(module_name)
-        textual_class = getattr(module, class_name)
-
-        kwargs = self._build_widget_kwargs(attr, textual_class)
-
-        # Auto-generate unique widget id
-        if "id" not in kwargs:
-            kwargs["id"] = f"{tag}_{self.widget_counter}"
-
-        if isinstance(node.value, Bag):
-            # CONTAINER: ha figli
-            content = ""
-        else:
-            # LEAF: prendi il contenuto
-            content = str(node.value) if node.value else ""
-
-        # Crea il widget - mappa content sul primo parametro posizionale come keyword
-        first_param = self._get_first_positional_param(textual_class)
-        if content and first_param and first_param not in kwargs:
-            kwargs[first_param] = content
-        widget = textual_class(**kwargs)
-
-        # Salva il widget nel nodo
-        node.compiled["widget"] = widget
-
-        # Monta il widget nel parent
-        parent_widget.mount(widget)
-
-        # Se è un container, compila ricorsivamente i figli
-        if isinstance(node.value, Bag):
-            for child_node in node.value:
-                self._compile_node(child_node, widget)
-
-    def _build_widget_kwargs(self, attr: dict[str, Any], widget_class: type) -> dict[str, Any]:
-        """Build kwargs for widget constructor, filtering by signature."""
-        sig = inspect.signature(widget_class.__init__)
-        valid_params = set(sig.parameters.keys()) - {"self"}
-        has_var_keyword = any(
-            p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
-        )
-        kwargs = {}
-        for key, value in attr.items():
-            if key.startswith("_"):
-                continue
-            if has_var_keyword or key in valid_params:
-                kwargs[key] = value
-        return kwargs
-
-    def _build_method_kwargs(self, attr: dict[str, Any], method: callable) -> dict[str, Any]:
-        """Build kwargs for a method call, filtering by signature.
-
-        Similar to _build_widget_kwargs but for methods like add_row(), add_column().
-        """
-        sig = inspect.signature(method)
-        valid_params = set(sig.parameters.keys()) - {"self"}
-        has_var_keyword = any(
-            p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
-        )
-        kwargs = {}
-        for key, value in attr.items():
-            if key.startswith("_"):
-                continue
-            if has_var_keyword or key in valid_params:
-                kwargs[key] = value
-        return kwargs
-
-    def _get_first_positional_param(self, widget_class: type) -> str | None:
-        """Get the name of the first positional parameter (after self).
-
-        Returns the parameter name if it exists and is positional, None otherwise.
-        This allows mapping node.value to the appropriate parameter (content, label, text, etc.)
-        """
-        sig = inspect.signature(widget_class.__init__)
-        params = list(sig.parameters.values())
-        if len(params) > 1:
-            first_param = params[1]  # Skip 'self'
-            if first_param.kind in (
-                inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                inspect.Parameter.POSITIONAL_ONLY,
-            ):
-                return first_param.name
-        return None
+    @element(sub_tags="")
+    def binding(self, key: str = "", action: str = "", description: str = ""):
+        """Key binding: maps a key press to an action method."""
+        ...
 
     # -------------------------------------------------------------------------
-    # Dedicated compile methods for widgets needing special handling
+    # Components (composite elements expanded at compile time)
     # -------------------------------------------------------------------------
 
-    def _compile_static(self, node: BagNode, parent_widget: Widget) -> None:
-        """Static: semplice widget di testo."""
-        from textual.widgets import Static
+    @component(sub_tags="")
+    def fieldset(self, comp, title="", **kwargs):
+        """A group of input fields with a title. Closed: returns parent for chaining."""
+        if title:
+            comp.static(title)
 
-        content = str(node.value) if node.value else ""
-        # Filtra attributi interni (iniziano con _)
-        attr = {k: v for k, v in node.attr.items() if not k.startswith("_")}
+    @component(sub_tags="*")
+    def form(self, comp, title="", **kwargs):
+        """A form container. Open: returns internal bag for adding fields."""
+        if title:
+            comp.static(title)
 
-        if "id" not in attr:
-            attr["id"] = f"static_{self.widget_counter}"
 
-        widget = Static(content, **attr)
-        node.compiled["widget"] = widget
-        parent_widget.mount(widget)
+class TextualBuilder(TextualWidgetsMixin, BagBuilderBase):
+    """Builder for Textual TUI elements.
 
-    def _compile_tabbedcontent(self, node: BagNode, parent_widget: Widget) -> None:
-        """TabbedContent: usa add_pane() per aggiungere i TabPane."""
-        from textual.widgets import TabbedContent
+    All @element and @component definitions live in TextualWidgetsMixin.
+    Subclass TextualBuilder freely — the mixin schema is inherited via MRO.
 
-        attr = dict(node.attr)
-        kwargs = self._build_widget_kwargs(attr, TabbedContent)
+    To add custom components, define them in a mixin:
 
-        if "id" not in kwargs:
-            kwargs["id"] = f"tabbedcontent_{self.widget_counter}"
+        class MyMixin:
+            @component(sub_tags="")
+            def login_form(self, comp, **kwargs):
+                comp.input(placeholder="Username")
+                comp.button("Login")
 
-        widget = TabbedContent(**kwargs)
-        node.compiled["widget"] = widget
-        parent_widget.mount(widget)
-
-        # I TabPane vanno aggiunti con add_pane(), non mount()
-        if isinstance(node.value, Bag):
-            for child_node in node.value:
-                self._compile_tabpane_for_tabbedcontent(child_node, widget)
-
-    def _compile_tabpane_for_tabbedcontent(self, node: BagNode, tabbed_content: Widget) -> None:
-        """TabPane: aggiunto a TabbedContent con add_pane()."""
-        from textual.widgets import TabPane
-
-        attr = dict(node.attr)
-        title = attr.pop("title", None) or "Untitled"
-        kwargs = self._build_widget_kwargs(attr, TabPane)
-
-        if "id" not in kwargs:
-            kwargs["id"] = f"tabpane_{self.widget_counter}"
-
-        widget = TabPane(title, **kwargs)
-        node.compiled["widget"] = widget
-
-        # Usa add_pane() invece di mount()
-        tabbed_content.add_pane(widget)
-
-        # Compila ricorsivamente i figli dentro il TabPane
-        if isinstance(node.value, Bag):
-            for child_node in node.value:
-                self._compile_node(child_node, widget)
-
-    def _compile_datatable(self, node: BagNode, parent_widget: Widget) -> None:
-        """DataTable: columns and rows via add_column/add_row."""
-        from textual.widgets import DataTable
-
-        attr = dict(node.attr)
-        kwargs = self._build_widget_kwargs(attr, DataTable)
-
-        if "id" not in kwargs:
-            kwargs["id"] = f"datatable_{self.widget_counter}"
-
-        widget = DataTable(**kwargs)
-        node.compiled["widget"] = widget
-        parent_widget.mount(widget)
-
-        if isinstance(node.value, Bag):
-            columns = []
-            rows = []
-            for child_node in node.value:
-                if child_node.tag == "column":
-                    columns.append(child_node)
-                elif child_node.tag == "row":
-                    rows.append(child_node)
-
-            for col_node in columns:
-                col_attr = dict(col_node.attr)
-                label = col_attr.get("label", str(col_node.value) if col_node.value else "")
-                # Filter column kwargs based on add_column signature (version-safe)
-                col_kwargs = self._build_method_kwargs(col_attr, widget.add_column)
-                widget.add_column(label, **col_kwargs)
-
-            for row_node in rows:
-                row_attr = dict(row_node.attr)
-                if isinstance(row_node.value, (list, tuple)):
-                    cells = row_node.value
-                elif isinstance(row_node.value, Bag):
-                    cells = [str(c.value) for c in row_node.value]
-                else:
-                    cells = [str(row_node.value)] if row_node.value else []
-                # Filter row kwargs based on add_row signature
-                row_kwargs = self._build_method_kwargs(row_attr, widget.add_row)
-                widget.add_row(*cells, **row_kwargs)
+        class MyBuilder(MyMixin, TextualBuilder):
+            pass
+    """

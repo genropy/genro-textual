@@ -7,7 +7,7 @@ Run with:
 Press the button to add a new Static widget.
 """
 
-from textual.widgets import Button
+from textual.widgets import Button, Static
 
 from genro_textual import TextualApp
 
@@ -15,12 +15,17 @@ from genro_textual import TextualApp
 class Application(TextualApp):
     """App with button that adds widgets dynamically."""
 
-    def recipe(self, root):
-        root.static("Press the button to add widgets")
-        root.static("Press 'q' to quit")
-        root.button("Add Static", id="add_btn", variant="primary")
+    def __init__(self):
+        super().__init__()
+        self._counter = 0
+
+    def recipe(self, page):
+        page.static("Press the button to add widgets")
+        page.static("Press 'q' to quit")
+        page.button("Add Static", id="add_btn", variant="primary")
 
     def on_button_pressed(self, event: Button.Pressed):
         if event.button.id == "add_btn":
-            count = len(list(self.root.children))
-            self.root.mount_from_bag(lambda b: b.static(f"Widget #{count}"))
+            self._counter += 1
+            widget = Static(f"Widget #{self._counter}")
+            self._live_app.root.mount(widget)

@@ -11,6 +11,7 @@ from genro_textual import TextualApp
 class Application(TextualApp):
     """Minimal TextualApp showing basic usage."""
 
-    def recipe(self, root):
-        root.static("Hello, Textual!")
-        root.static("Press 'q' to quit")
+    def recipe(self, page):
+        page.binding(key="q", action="quit", description="Quit")
+        page.static("Hello, Textual!")
+        page.static("Press 'q' to quit")

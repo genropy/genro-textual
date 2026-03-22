@@ -13,17 +13,12 @@ from genro_textual import TextualApp
 class Application(TextualApp):
     """DataTable with columns and rows defined in Bag."""
 
-    CSS = """
-    DataTable {
-        height: 1fr;
-    }
-    """
+    def recipe(self, page):
+        page.css("DataTable { height: 1fr; }")
 
-    def recipe(self, root):
-        root.static("DataTable Example")
+        page.static("DataTable Example")
 
-        # Create DataTable with columns and rows
-        table = root.datatable(id="users-table", zebra_stripes=True)
+        table = page.datatable(id="users-table", zebra_stripes=True)
         table.column("Name", key="name")
         table.column("Age", key="age")
         table.column("City", key="city")
@@ -35,4 +30,4 @@ class Application(TextualApp):
         table.row(["Diana", 28, "Turin", "Developer"], key="r4")
         table.row(["Eve", 32, "Florence", "Analyst"], key="r5")
 
-        root.static("Press 'q' to quit")
+        page.static("Press 'q' to quit")
