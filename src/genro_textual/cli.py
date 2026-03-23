@@ -56,7 +56,12 @@ def _run_with_tmux(file_path: str, app_name: str) -> None:
         ["tmux", "split-window", "-v", "-t", session, "-p", "30", connect_cmd],
         check=True,
     )
-    # Focus on the TUI pane (top) — user switches to REPL with Ctrl+B ↓
+    # Enable mouse support — click on a pane to focus it
+    subprocess.run(
+        ["tmux", "set-option", "-t", session, "mouse", "on"],
+        check=True,
+    )
+    # Focus on the TUI pane (top)
     subprocess.run(
         ["tmux", "select-pane", "-t", session + ":.0"],
         check=True,
