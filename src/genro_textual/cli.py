@@ -56,9 +56,9 @@ def _run_with_tmux(file_path: str, app_name: str) -> None:
         ["tmux", "split-window", "-v", "-t", session, "-p", "30", connect_cmd],
         check=True,
     )
-    # Focus on the REPL pane (bottom)
+    # Focus on the TUI pane (top) — user switches to REPL with Ctrl+B ↓
     subprocess.run(
-        ["tmux", "select-pane", "-t", session + ":.1"],
+        ["tmux", "select-pane", "-t", session + ":.0"],
         check=True,
     )
     # Attach to the session
