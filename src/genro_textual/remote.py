@@ -225,9 +225,12 @@ class RemoteServer:
 
         if cmd_type == "__call__":
             method_name, args, kwargs = cmd[1], cmd[2], cmd[3]
-            return self._safe_call(
+            self._safe_call(
                 lambda: getattr(self._app.page, method_name)(*args, **kwargs)
             )
+            # Don't return the result (BuilderBagNode) — it can't be pickled safely.
+            # The client uses PageProxy for chaining, not the raw node.
+            return None
 
         if cmd_type == "__quit__":
             self._safe_call(lambda: self._app._live_app.exit())
