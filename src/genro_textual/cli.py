@@ -253,7 +253,7 @@ _pygui() {
                     _arguments \\
                         '-c[Run with REPL in tmux]' \\
                         '-r[Run with autoreload]' \\
-                        '1:file:_files -g "*.py"'
+                        '1:file:_files -g "*(/) *.py"'
                     ;;
                 connect|stop)
                     _pygui_app_names
