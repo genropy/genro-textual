@@ -229,6 +229,10 @@ class RemoteServer:
                 lambda: getattr(self._app.page, method_name)(*args, **kwargs)
             )
 
+        if cmd_type == "__quit__":
+            self._safe_call(lambda: self._app._live_app.exit())
+            return "quitting"
+
         raise ValueError(f"Unknown command: {cmd_type}")
 
     def _safe_call(self, func: Callable[[], Any]) -> Any:

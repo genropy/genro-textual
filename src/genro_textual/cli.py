@@ -153,6 +153,33 @@ def connect_repl(name: str) -> None:
     code.interact(local={"app": app})
 
 
+def stop_app(name: str) -> None:
+    """Stop a running app and kill its tmux session if any."""
+    info = get_app_info(name)
+    if info is None:
+        print(f"App '{name}' not found")
+        sys.exit(1)
+
+    from genro_textual.remote import connect
+
+    try:
+        app = connect(name=name)
+        app._send(("__quit__",))
+        print(f"Stopped {name}")
+    except Exception as e:
+        print(f"Error stopping {name}: {e}")
+
+    # Kill tmux session if it exists
+    session = f"pygui-{name}"
+    subprocess.run(
+        ["tmux", "kill-session", "-t", session],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    unregister_app(name)
+
+
 def main() -> None:
     """CLI entry point."""
     parser = argparse.ArgumentParser(prog="pygui", description="TextualApp CLI")
@@ -175,6 +202,10 @@ def main() -> None:
     connect_parser = subparsers.add_parser("connect", help="Connect to an app")
     connect_parser.add_argument("name", help="App name")
 
+    # stop command
+    stop_parser = subparsers.add_parser("stop", help="Stop a running app")
+    stop_parser.add_argument("name", help="App name")
+
     args = parser.parse_args()
 
     if args.command == "run":
@@ -183,6 +214,8 @@ def main() -> None:
         list_running()
     elif args.command == "connect":
         connect_repl(args.name)
+    elif args.command == "stop":
+        stop_app(args.name)
 
 
 if __name__ == "__main__":
