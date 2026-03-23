@@ -39,8 +39,8 @@ def _run_with_tmux(file_path: str, app_name: str) -> None:
     python = sys.executable
     file_abs = os.path.abspath(file_path)
 
-    # Command for top pane: run the TUI app
-    run_cmd = f"{python} -m genro_textual.cli run {file_abs}"
+    # Command for top pane: run the TUI app, then kill session on exit
+    run_cmd = f"{python} -m genro_textual.cli run {file_abs}; tmux kill-session -t {session}"
     # Command for bottom pane: wait for app to register, then connect
     connect_cmd = (
         f"sleep 1 && {python} -m genro_textual.cli connect {app_name}"
