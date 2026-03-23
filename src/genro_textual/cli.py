@@ -176,13 +176,42 @@ def connect_repl(name: str) -> None:
 
     app = connect(name=name)
     port = info["port"]
+
+    def help():
+        """Show available REPL commands."""
+        print("""
+pygui REPL — connected to '{name}' on port {port}
+
+Add widgets:
+  app.page.static("Hello!")
+  app.page.button("Click me", variant="primary")
+  app.page.input(placeholder="Type here")
+  app.page.css(".title {{ color: red; }}")
+  app.page.binding(key="d", action="toggle_dark", description="Dark mode")
+
+Containers:
+  v = app.page.vertical()
+  v.static("Inside vertical")
+  v.button("OK")
+
+Inspect:
+  app.page.keys()          — list node keys
+  app.page["static_0"]     — get a node value
+
+Quit:
+  exit() or Ctrl+D
+""".format(name=name, port=port))
+
+    def keys():
+        """List page keys."""
+        return app.page.keys()
+
     print(f"Connected to {name} on port {port}")
-    print("Use 'app.page.static(\"text\")' to add widgets")
-    print("Type 'exit()' to quit")
+    print("Type help() for available commands, exit() to quit")
 
     import code
 
-    code.interact(local={"app": app})
+    code.interact(local={"app": app, "help": help, "keys": keys})
 
 
 def stop_app(name: str) -> None:
