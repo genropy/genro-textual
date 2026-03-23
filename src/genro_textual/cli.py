@@ -14,9 +14,9 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import os
+import shutil
 import subprocess
 import sys
-import time
 
 from genro_textual.registry import (
     find_free_port,
@@ -25,6 +25,44 @@ from genro_textual.registry import (
     register_app,
     unregister_app,
 )
+
+
+def _run_with_tmux(file_path: str, app_name: str) -> None:
+    """Run app in tmux: TUI on top pane, REPL on bottom pane."""
+    if shutil.which("tmux") is None:
+        print("Error: tmux not found. Install it or use two terminals:")
+        print(f"  Terminal 1: pygui run {file_path}")
+        print(f"  Terminal 2: pygui connect {app_name}")
+        sys.exit(1)
+
+    session = f"pygui-{app_name}"
+    python = sys.executable
+    file_abs = os.path.abspath(file_path)
+
+    # Command for top pane: run the TUI app
+    run_cmd = f"{python} -m genro_textual.cli run {file_abs}"
+    # Command for bottom pane: wait for app to register, then connect
+    connect_cmd = (
+        f"sleep 1 && {python} -m genro_textual.cli connect {app_name}"
+    )
+
+    # Create tmux session with the TUI in the first pane
+    subprocess.run(
+        ["tmux", "new-session", "-d", "-s", session, "-x", "200", "-y", "50", run_cmd],
+        check=True,
+    )
+    # Split horizontally: REPL on bottom (30% height)
+    subprocess.run(
+        ["tmux", "split-window", "-v", "-t", session, "-p", "30", connect_cmd],
+        check=True,
+    )
+    # Focus on the REPL pane (bottom)
+    subprocess.run(
+        ["tmux", "select-pane", "-t", session + ":.1"],
+        check=True,
+    )
+    # Attach to the session
+    os.execvp("tmux", ["tmux", "attach-session", "-t", session])
 
 
 def _run_with_reload(file_path: str) -> None:
@@ -51,21 +89,7 @@ def run_app(file_path: str, connect: bool = False, reload: bool = False) -> None
         return
 
     if connect:
-        # Lancia l'app in background e poi connetti
-        env = os.environ.copy()
-        env["PYTHONPATH"] = os.pathsep.join(sys.path)
-        subprocess.Popen(
-            [sys.executable, "-m", "genro_textual.cli", "run", file_path],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            env=env,
-        )
-        # Attendi che l'app si registri
-        for _ in range(20):  # Increased retries
-            time.sleep(0.2)
-            if get_app_info(app_name) is not None:
-                break
-        connect_repl(app_name)
+        _run_with_tmux(file_path, app_name)
         return
 
     # Carica il modulo dal file
