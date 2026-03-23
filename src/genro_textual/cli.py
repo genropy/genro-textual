@@ -122,15 +122,38 @@ def run_app(file_path: str, connect: bool = False, reload: bool = False) -> None
         unregister_app(app_name)
 
 
+def _is_alive(port: int) -> bool:
+    """Check if something is listening on the given port."""
+    import socket
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(0.3)
+    try:
+        sock.connect(("localhost", port))
+        sock.close()
+        return True
+    except (ConnectionRefusedError, OSError):
+        return False
+
+
 def list_running() -> None:
-    """List all registered apps."""
+    """List all registered apps, checking if they are alive."""
     apps = list_apps()
     if not apps:
         print("No apps registered")
         return
+    dead = []
     for app_name, info in apps.items():
         port = info["port"] if isinstance(info, dict) else info
-        print(f"  {app_name}: port {port}")
+        alive = _is_alive(port)
+        status = "alive" if alive else "dead"
+        print(f"  {app_name}: port {port} [{status}]")
+        if not alive:
+            dead.append(app_name)
+    if dead:
+        for name in dead:
+            unregister_app(name)
+        print(f"  Cleaned up {len(dead)} dead app(s)")
 
 
 def connect_repl(name: str) -> None:
