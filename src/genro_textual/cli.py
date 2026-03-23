@@ -214,6 +214,70 @@ def stop_app(name: str) -> None:
     print(f"Unregistered {name}")
 
 
+def _list_app_names() -> list[str]:
+    """Return registered app names for completion."""
+    return list(list_apps().keys())
+
+
+def _generate_zsh_completion() -> str:
+    """Generate zsh completion script for pygui."""
+    return '''#compdef pygui
+
+_pygui_app_names() {
+    local -a apps
+    apps=($(pygui _complete_apps 2>/dev/null))
+    _describe 'app name' apps
+}
+
+_pygui() {
+    local -a commands
+    commands=(
+        'run:Run a TextualApp'
+        'list:List running apps'
+        'connect:Connect REPL to an app'
+        'stop:Stop a running app'
+        'completions:Generate shell completions'
+    )
+
+    _arguments -C \\
+        '1:command:->command' \\
+        '*::arg:->args'
+
+    case $state in
+        command)
+            _describe 'command' commands
+            ;;
+        args)
+            case $words[1] in
+                run)
+                    _arguments \\
+                        '-c[Run with REPL in tmux]' \\
+                        '-r[Run with autoreload]' \\
+                        '1:file:_files -g "*.py"'
+                    ;;
+                connect|stop)
+                    _pygui_app_names
+                    ;;
+            esac
+            ;;
+    esac
+}
+
+_pygui "$@"
+'''
+
+
+def print_completions(shell: str) -> None:
+    """Print shell completion script."""
+    if shell == "zsh":
+        print(_generate_zsh_completion())
+        print("# Add to ~/.zshrc:")
+        print("#   eval \"$(pygui completions zsh)\"")
+    else:
+        print(f"Unsupported shell: {shell}. Only 'zsh' is supported.")
+        sys.exit(1)
+
+
 def main() -> None:
     """CLI entry point."""
     parser = argparse.ArgumentParser(prog="pygui", description="TextualApp CLI")
@@ -240,6 +304,13 @@ def main() -> None:
     stop_parser = subparsers.add_parser("stop", help="Stop a running app")
     stop_parser.add_argument("name", help="App name")
 
+    # completions command
+    comp_parser = subparsers.add_parser("completions", help="Generate shell completions")
+    comp_parser.add_argument("shell", nargs="?", default="zsh", help="Shell type (default: zsh)")
+
+    # Hidden: emit app names for completion
+    subparsers.add_parser("_complete_apps", help=argparse.SUPPRESS)
+
     args = parser.parse_args()
 
     if args.command == "run":
@@ -250,6 +321,11 @@ def main() -> None:
         connect_repl(args.name)
     elif args.command == "stop":
         stop_app(args.name)
+    elif args.command == "completions":
+        print_completions(args.shell)
+    elif args.command == "_complete_apps":
+        for name in _list_app_names():
+            print(name)
 
 
 if __name__ == "__main__":
