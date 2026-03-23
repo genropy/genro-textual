@@ -228,6 +228,12 @@ def connect_repl(name: str) -> None:
                 return False
             return super().runsource(source, filename, symbol)
 
+    # Enable readline for history (arrow keys) and tab completion
+    try:
+        import readline  # noqa: F401
+    except ImportError:
+        pass
+
     print(f"Connected to {name} on port {port}")
     print("Type /help for available commands")
 
