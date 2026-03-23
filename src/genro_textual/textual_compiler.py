@@ -54,11 +54,11 @@ class TextualCompiler(BagCompilerBase):
         css_parts: list[str] = []
 
         for node in compiled_bag:
-            if node.tag == "css":
+            if node.node_tag == "css":
                 css_text = str(node.value) if node.value else ""
                 if css_text:
                     css_parts.append(css_text)
-            elif node.tag == "binding":
+            elif node.node_tag == "binding":
                 key = node.attr.get("key", "")
                 action = node.attr.get("action", "")
                 description = node.attr.get("description", "")
@@ -74,7 +74,7 @@ class TextualCompiler(BagCompilerBase):
 
     def _render_node(self, node: BagNode, parent_widget: Widget) -> None:
         """Render a single node: dispatch by tag, then recurse children."""
-        tag = node.tag or "static"
+        tag = node.node_tag or "static"
 
         render_method = getattr(self, f"_render_{tag}", None)
         if render_method:
@@ -90,7 +90,7 @@ class TextualCompiler(BagCompilerBase):
         its children are rendered directly into the parent — the component
         node itself is transparent after expansion.
         """
-        tag = node.tag or "static"
+        tag = node.node_tag or "static"
         attr = dict(node.attr)
 
         try:
@@ -205,9 +205,9 @@ class TextualCompiler(BagCompilerBase):
         columns = []
         rows = []
         for child_node in node.value:
-            if child_node.tag == "column":
+            if child_node.node_tag == "column":
                 columns.append(child_node)
-            elif child_node.tag == "row":
+            elif child_node.node_tag == "row":
                 rows.append(child_node)
 
         for col_node in columns:
