@@ -22,7 +22,7 @@ classifiers = [
 ]
 dependencies = [
     "genro-bag>=0.7.0",
-    "genro-builders>=0.2.0",
+    "genro-builders>=0.3.0",
     "textual>=0.47.0",
     "watchfiles>=0.21.0",
 ]
