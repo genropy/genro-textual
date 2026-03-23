@@ -82,7 +82,11 @@ def _run_with_reload(file_path: str) -> None:
 
 def run_app(file_path: str, connect: bool = False, reload: bool = False) -> None:
     """Run a TextualApp from file path. Expects class Application."""
-    app_name = os.path.basename(file_path).replace(".py", "")
+    if not os.path.isfile(file_path):
+        print(f"Error: file not found: {file_path}")
+        sys.exit(1)
+
+    app_name = os.path.splitext(os.path.basename(file_path))[0]
 
     if reload:
         _run_with_reload(file_path)
