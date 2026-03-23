@@ -160,14 +160,15 @@ def stop_app(name: str) -> None:
         print(f"App '{name}' not found")
         sys.exit(1)
 
+    # Try graceful shutdown via remote protocol
     from genro_textual.remote import connect
 
     try:
         app = connect(name=name)
         app._send(("__quit__",))
         print(f"Stopped {name}")
-    except Exception as e:
-        print(f"Error stopping {name}: {e}")
+    except Exception:
+        print(f"App {name} not responding, cleaning up")
 
     # Kill tmux session if it exists
     session = f"pygui-{name}"
@@ -178,6 +179,7 @@ def stop_app(name: str) -> None:
     )
 
     unregister_app(name)
+    print(f"Unregistered {name}")
 
 
 def main() -> None:
