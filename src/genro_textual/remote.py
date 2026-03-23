@@ -228,8 +228,8 @@ class RemoteServer:
             self._safe_call(
                 lambda: getattr(self._app.page, method_name)(*args, **kwargs)
             )
-            # Don't return the result (BuilderBagNode) — it can't be pickled safely.
-            # The client uses PageProxy for chaining, not the raw node.
+            # Re-compile and re-render so changes appear immediately
+            self._safe_call(lambda: self._app.recompile())
             return None
 
         if cmd_type == "__quit__":

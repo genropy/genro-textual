@@ -141,6 +141,18 @@ class TextualApp(BagAppBase):
     def recipe(self, page: BuilderBag) -> None:
         """Override to build your UI. page is a BuilderBag with TextualBuilder."""
 
+    def recompile(self) -> None:
+        """Re-compile the current page and re-render.
+
+        Used after modifying the page externally (e.g. via REPL).
+        Does NOT clear the page or re-run recipe — just recompiles
+        and re-renders the current state.
+        """
+        self._binding.unbind()
+        self._static_bag = self._compiler.compile(self._store)
+        self._binding.bind(self._static_bag, self._data)
+        self.render(self._static_bag)
+
     def render(self, compiled_bag: Bag) -> None:
         """Mount widgets from CompiledBag into the LiveApp."""
         if self._live_app is None or self._live_app.root is None:
