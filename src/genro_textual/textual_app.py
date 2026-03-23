@@ -115,10 +115,13 @@ class TextualApp(BagAppBase):
 
     def __init__(self, remote_port: int | None = None) -> None:
         super().__init__()
-        self._remote_server: RemoteServer | None = None
-        self._remote_port = remote_port
         self._live_app: LiveApp | None = None
         self._updating_from_widget = False
+        if remote_port is not None:
+            from genro_textual.remote import RemoteServer
+            self._remote_server: RemoteServer | None = RemoteServer(self, remote_port)
+        else:
+            self._remote_server = None
 
     @property
     def page(self) -> BuilderBag:
@@ -195,11 +198,6 @@ class TextualApp(BagAppBase):
     def run(self) -> None:
         """Run the Textual app."""
         self._live_app = LiveApp(self)
+        if self._remote_server is not None:
+            self._remote_server.start()
         self._live_app.run()
-
-    def _enable_remote(self, port: int) -> None:
-        """Enable remote control via socket."""
-        from genro_textual.remote import RemoteServer
-
-        self._remote_server = RemoteServer(self, port)
-        self._remote_server.start()
