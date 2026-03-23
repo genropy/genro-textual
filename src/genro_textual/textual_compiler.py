@@ -50,7 +50,6 @@ class TextualCompiler(BagCompilerBase):
         applied to live_app, not rendered as widgets.
         All other nodes are rendered as widgets into live_app.root.
         """
-        self._widget_counter = 0
         css_parts: list[str] = []
 
         for node in compiled_bag:
