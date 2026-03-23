@@ -165,22 +165,15 @@ def list_running() -> None:
         print(f"  Cleaned up {len(dead)} dead app(s)")
 
 
-def connect_repl(name: str) -> None:
-    """Start a REPL connected to an app."""
-    info = get_app_info(name)
-    if info is None:
-        print(f"App '{name}' not found")
-        sys.exit(1)
-
-    from genro_textual.remote import connect
-
-    app = connect(name=name)
-    port = info["port"]
-
-    def help():
-        """Show available REPL commands."""
-        print("""
+def _repl_help(name: str, port: int) -> None:
+    """Print REPL help."""
+    print(f"""
 pygui REPL — connected to '{name}' on port {port}
+
+Slash commands:
+  /help             — show this help
+  /keys             — list page node keys
+  /quit             — quit the REPL
 
 Add widgets:
   app.page.static("Hello!")
@@ -197,21 +190,49 @@ Containers:
 Inspect:
   app.page.keys()          — list node keys
   app.page["static_0"]     — get a node value
+""")
 
-Quit:
-  exit() or Ctrl+D
-""".format(name=name, port=port))
 
-    def keys():
-        """List page keys."""
-        return app.page.keys()
-
-    print(f"Connected to {name} on port {port}")
-    print("Type help() for available commands, exit() to quit")
-
+def connect_repl(name: str) -> None:
+    """Start a REPL connected to an app."""
     import code
 
-    code.interact(local={"app": app, "help": help, "keys": keys})
+    info = get_app_info(name)
+    if info is None:
+        print(f"App '{name}' not found")
+        sys.exit(1)
+
+    from genro_textual.remote import connect
+
+    app = connect(name=name)
+    port = info["port"]
+
+    slash_commands = {
+        "/help": lambda: _repl_help(name, port),
+        "/keys": lambda: print(app.page.keys()),
+        "/quit": lambda: (_ for _ in ()).throw(SystemExit(0)),
+    }
+
+    class SlashConsole(code.InteractiveConsole):
+        """Python REPL that intercepts /commands."""
+
+        def runsource(self, source, filename="<input>", symbol="single"):
+            stripped = source.strip()
+            if stripped.startswith("/"):
+                cmd = stripped.split()[0]
+                handler = slash_commands.get(cmd)
+                if handler:
+                    handler()
+                    return False
+                print(f"Unknown command: {cmd}. Type /help for available commands.")
+                return False
+            return super().runsource(source, filename, symbol)
+
+    print(f"Connected to {name} on port {port}")
+    print("Type /help for available commands")
+
+    console = SlashConsole(locals={"app": app})
+    console.interact(banner="", exitmsg="")
 
 
 def stop_app(name: str) -> None:
