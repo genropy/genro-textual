@@ -7,12 +7,33 @@ and is not tested here.
 """
 from __future__ import annotations
 
-import pytest
 from genro_bag import Bag
 from genro_builders.builder_bag import BuilderBag
 
-from genro_textual.textual_builder import TextualBuilder, TextualWidgetsMixin
+from genro_textual.textual_builder import TextualBuilder
 from genro_textual.textual_compiler import TextualCompiler
+
+
+# ---------------------------------------------------------------------------
+# Helper: create a TextualApp without Textual, run pipeline via setup()
+# ---------------------------------------------------------------------------
+
+
+def _make_app(recipe_fn, render_counter=None):
+    """Create a TextualApp, override render to avoid Textual, call setup()."""
+    from genro_textual.textual_app import TextualApp
+
+    class TestApp(TextualApp):
+        def recipe(self, page):
+            recipe_fn(page)
+
+        def render(self, compiled_bag):
+            if render_counter is not None:
+                render_counter["n"] += 1
+
+    app = TestApp()
+    app.setup()
+    return app
 
 
 # ---------------------------------------------------------------------------
@@ -198,70 +219,36 @@ class TestCompiler:
 class TestAppPipeline:
     """Test TextualApp pipeline without running Textual."""
 
-    def _make_app(self, recipe_fn):
-        """Create a TextualApp with given recipe, run pipeline without Textual."""
-        from genro_textual.textual_app import TextualApp
-
-        class TestApp(TextualApp):
-            def recipe(self, page):
-                recipe_fn(page)
-
-            def render(self, compiled_bag):
-                # Override: don't try to mount widgets (no LiveApp)
-                pass
-
-        app = TestApp()
-        app.recipe(app.page)
-        app._compiler = TextualCompiler(app.page.builder)
-        app._static_bag = app._compiler.compile(app.page)
-        app._binding.bind(app._static_bag, app.data)
-        app._auto_compile = True
-
-        # Subscribe store for incremental updates
-        if not app._store.backref:
-            app._store.set_backref()
-        app._store.subscribe(
-            "store_watcher",
-            delete=app._on_store_deleted,
-            insert=app._on_store_inserted,
-            update=app._on_store_updated,
-        )
-
-        return app
-
     def test_basic_pipeline(self):
         def recipe(page):
             page.static("Hello")
             page.button("OK")
 
-        app = self._make_app(recipe)
-        assert len(app._static_bag) == 2
+        app = _make_app(recipe)
+        assert len(app.compiled) == 2
 
     def test_pointer_binding(self):
         def recipe(page):
             page.static("^title")
 
-        app = self._make_app(recipe)
-        # Set data then rebind — _make_app already did initial bind with empty data
+        app = _make_app(recipe)
         app.data["title"] = "Hello"
         app._binding.rebind(app.data)
 
-        node = list(app._static_bag)[0]
+        node = list(app.compiled)[0]
         assert node.value == "Hello"
 
     def test_reactive_data_change(self):
         def recipe(page):
             page.static("^msg")
 
-        app = self._make_app(recipe)
-        # Set initial data and rebind
+        app = _make_app(recipe)
         app.data["msg"] = "Initial"
         app._binding.rebind(app.data)
 
-        node = list(app._static_bag)[0]
+        node = list(app.compiled)[0]
         assert node.value == "Initial"
 
-        # Change data — node should update reactively
         app.data["msg"] = "Updated"
         assert node.value == "Updated"
 
@@ -274,83 +261,47 @@ class TestAppPipeline:
 class TestIncrementalRepl:
     """Test incremental updates — simulates REPL adding/removing nodes."""
 
-    def _make_app(self, recipe_fn):
-        """Create app with store subscription for incremental updates."""
-        from genro_textual.textual_app import TextualApp
-
-        render_count = {"n": 0}
-
-        class TestApp(TextualApp):
-            def recipe(self, page):
-                recipe_fn(page)
-
-            def render(self, compiled_bag):
-                render_count["n"] += 1
-
-        app = TestApp()
-        app.recipe(app.page)
-        app._compiler = TextualCompiler(app.page.builder)
-        app._static_bag = app._compiler.compile(app.page)
-        if not app._static_bag.backref:
-            app._static_bag.set_backref()
-        app._binding.bind(app._static_bag, app.data)
-        app._auto_compile = True
-
-        if not app._store.backref:
-            app._store.set_backref()
-        app._store.subscribe(
-            "store_watcher",
-            delete=app._on_store_deleted,
-            insert=app._on_store_inserted,
-            update=app._on_store_updated,
-        )
-
-        app._render_count = render_count
-        return app
-
     def test_add_node_after_setup(self):
         """Simulates REPL: app.page.static('New widget')."""
         def recipe(page):
             page.static("Original")
 
-        app = self._make_app(recipe)
-        assert len(app._static_bag) == 1
+        app = _make_app(recipe)
+        assert len(app.compiled) == 1
 
-        # Simulate REPL command
         app.page.static("Added from REPL")
 
-        # Compiled bag should have 2 nodes now
-        assert len(app._static_bag) == 2
-        tags = [n.node_tag for n in app._static_bag]
+        assert len(app.compiled) == 2
+        tags = [n.node_tag for n in app.compiled]
         assert tags == ["static", "static"]
-        values = [n.value for n in app._static_bag]
+        values = [n.value for n in app.compiled]
         assert values == ["Original", "Added from REPL"]
 
     def test_add_triggers_render(self):
         """Adding a node should trigger _rerender."""
+        counter = {"n": 0}
+
         def recipe(page):
             page.static("Hello")
 
-        app = self._make_app(recipe)
-        initial_renders = app._render_count["n"]
+        app = _make_app(recipe, render_counter=counter)
+        initial = counter["n"]
 
         app.page.button("New button")
-        assert app._render_count["n"] > initial_renders
+        assert counter["n"] > initial
 
     def test_add_node_with_pointer(self):
         """Simulates REPL: app.page.static('^msg') with data binding."""
         def recipe(page):
             page.static("Fixed")
 
-        app = self._make_app(recipe)
+        app = _make_app(recipe)
         app.data["msg"] = "Dynamic"
 
-        # Add a node with ^pointer
         app.page.static("^msg")
 
-        assert len(app._static_bag) == 2
-        new_node = list(app._static_bag)[1]
-        # The pointer should be resolved against data
+        assert len(app.compiled) == 2
+        new_node = list(app.compiled)[1]
         assert new_node.value == "Dynamic"
 
     def test_multiple_adds(self):
@@ -358,12 +309,12 @@ class TestIncrementalRepl:
         def recipe(page):
             page.static("Start")
 
-        app = self._make_app(recipe)
+        app = _make_app(recipe)
 
         app.page.button("Button 1")
         app.page.button("Button 2")
         app.page.static("End")
 
-        assert len(app._static_bag) == 4
-        tags = [n.node_tag for n in app._static_bag]
+        assert len(app.compiled) == 4
+        tags = [n.node_tag for n in app.compiled]
         assert tags == ["static", "button", "button", "static"]

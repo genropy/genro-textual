@@ -125,8 +125,8 @@ class TextualApp(BagAppBase):
 
     @property
     def page(self) -> BuilderBag:
-        """The page Bag (UI structure)."""
-        return self._store
+        """The page Bag (UI structure). Domain name for source."""
+        return self.source
 
     @property
     def data(self) -> Bag:
