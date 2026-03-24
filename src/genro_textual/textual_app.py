@@ -191,7 +191,7 @@ class TextualApp(BagAppBase):
         for b in bindings:
             if b["location"] == "value":
                 self._updating_from_widget = True
-                node.set_relative_data(self.data, b["pointer_info"].raw[1:], value)
+                node._set_relative_data(self.data, b["pointer_info"].raw[1:], value)
                 self._updating_from_widget = False
                 break
 

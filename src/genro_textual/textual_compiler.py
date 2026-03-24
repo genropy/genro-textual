@@ -93,7 +93,7 @@ class TextualCompiler(BagCompilerBase):
         attr = dict(node.attr)
 
         try:
-            schema_info = self.builder.get_schema_info(tag)
+            schema_info = self.builder._get_schema_info(tag)
         except KeyError:
             schema_info = {}
         compile_kwargs = schema_info.get("compile_kwargs", {})
