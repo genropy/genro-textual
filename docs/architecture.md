@@ -10,15 +10,36 @@ genro-textual follows a strict separation between configuration and execution:
 
 ## Pipeline
 
+```mermaid
+graph TD
+    R[recipe] --> SB[Source Bag]
+    SB -->|compile| CB[Compiled Bag]
+    CB -->|render| WT[Widget Tree]
+    DB[Data Bag] -->|"binding (data → widget)"| CB
+    WT -->|"blur/change (widget → data)"| DB
 ```
-recipe(page)         →  Source Bag (widgets, css, bindings, ^pointers)
-    ↓ compile()
-_materialize()       →  Static Bag (components expanded)
-    ↓ bind()
-BindingManager       →  Bound Bag (pointers resolved, subscriptions active)
-    ↓ render()
-TextualCompiler      →  Widget tree mounted on LiveApp
+
+### Single-Pass Compilation
+
+The compiler walks the source Bag once. For each node:
+1. Clean subscription map for this subtree
+2. Expand component if resolver present
+3. Create node in compiled Bag
+4. Resolve `^pointers` against data and register in subscription map
+5. Recurse into children
+
+### Subscription Map
+
+Flat `str → list[str]`:
+
+```python
+{
+    "form.name": ["horizontal_0.verticalscroll_0.input_0?value",
+                   "horizontal_0.verticalscroll_0.static_2"],
+}
 ```
+
+Key: data path. Value: compiled node paths (with optional `?attr` suffix).
 
 ## Modules
 
@@ -26,13 +47,11 @@ TextualCompiler      →  Widget tree mounted on LiveApp
 
 `TextualWidgetsMixin` + `TextualBuilder(TextualWidgetsMixin, BagBuilderBase)`
 
-All `@element` and `@component` definitions live in the mixin. This enables
-subclass inheritance: a user can create `MyBuilder(MyMixin, TextualBuilder)`
-and inherit the full schema.
+All `@element` and `@component` definitions live in the mixin for inheritance via MRO.
 
 Elements include:
 - **Containers**: vertical, horizontal, grid, center, etc.
-- **Widgets**: static, button, input, checkbox, datatable, tabs, etc.
+- **Widgets**: static, button, input, checkbox, datatable, tree (with store), etc.
 - **App config**: css, binding (not rendered as widgets)
 - **Components**: fieldset, form (expanded at compile time)
 
@@ -40,59 +59,88 @@ Elements include:
 
 `TextualCompiler(BagCompilerBase)`
 
-Inherits `compile()` from base (materialize + resolve pointers).
+Inherits `compile()` from base (single-pass: expand + resolve + register).
 Defines its own `render(compiled_bag, live_app)`:
 
 1. Extract `css` nodes → apply to `live_app.stylesheet`
 2. Extract `binding` nodes → call `live_app.bind()`
 3. Render remaining nodes as Textual widgets via `_render_node()`
 
-Dispatch: `_render_<tag>` methods for special widgets (tabbedcontent,
-datatable, static), `_render_default` for generic widgets via
-compile_kwargs (module + class).
+**Dispatch**: `_render_<tag>` methods for special widgets (tabbedcontent, datatable, static, tree), `_render_default` for generic widgets via compile_kwargs (module + class).
 
-Materialized components without compile_class are transparent:
-their children render directly into the parent.
+**Attribute classification at mount**: for each node attribute:
+1. Constructor parameter → `widget.__init__`
+2. CSS property → `widget.styles`
+3. Reactive attribute → `widget.set_reactive`
+
+**Store binding**: when a widget has a `store` attribute (a Bag), `_mount` subscribes to the Bag for reactive updates. The Tree widget repopulates from the Bag on changes, preserving expanded state.
 
 ### textual_app.py
 
 `TextualApp(BagAppBase)` — the puppeteer.
 
-- `page` property exposes `_store` (domain name for Textual)
+- `page` property exposes source Bag (domain name for Textual)
 - `recipe(page)` — user override
 - `render(compiled_bag)` — mounts widgets via `compiler.render()`
-- `_on_node_updated(node)` — reactive: updates specific widget, thread-safe via `call_from_thread`
-- `_on_widget_changed(widget, value)` — bidirectional: widget → data, with anti-loop guard
+- `_on_node_updated(node)` — reactive: updates specific widget. Uses `call_from_thread` only when called from a different thread (remote REPL, timer).
+- `_on_widget_changed(widget, value)` — bidirectional: widget → data
+- `_find_compiled_path(node)` — uses `Bag.relative_path()` to find the node path in the compiled Bag
+- `_find_data_path(compiled_path)` — reverse-lookup in subscription map
 - `run()` — creates LiveApp and starts Textual event loop
 
 `LiveApp(App)` — the puppet.
 
 - `compose()` → root Vertical container
 - `on_mount()` → `owner.setup()` (recipe + compile + bind + render)
-- All events delegated to owner
+- Events delegated to owner: button_pressed, key, descendant_blur, input_changed, checkbox_changed, switch_changed
 
 ## Data Binding
 
-### Data → Widget (^pointer)
+### Data to Widget (`^pointer`)
 
 ```python
-def recipe(self, page):
-    page.static("^greeting")     # value bound to data["greeting"]
-    page.input(value="^form.name")  # attr bound to data["form.name"]
+page.static("^greeting")              # value bound to data["greeting"]
+page.input(value="^form.name")        # attr bound to data["form.name"]
+page.vertical(width="^_system.w")     # CSS property bound to data path
 ```
 
-Flow: `data["greeting"] = "Hello"` → BindingManager → node.value updated → `_on_node_updated` → `widget.update("Hello")`
+Flow: `data["greeting"] = "Hello"` → BindingManager → node updated → `_on_node_updated` → widget updated.
 
-### Widget → Data (bidirectional)
+### Widget to Data (bidirectional)
 
-When user types in Input: `LiveApp.on_input_changed` → `owner._on_widget_changed` → writes to data Bag.
+- **Input**: writes on **blur** (via `on_descendant_blur`), not every keystroke
+- **Checkbox/Switch**: writes on **change** (immediate)
 
-Anti-loop guard: `_updating_from_widget` flag prevents the cycle
-widget → data → binding → widget.
+Flow: user edits Input → Tab → `on_descendant_blur` → `_on_widget_changed` → `data.set_item(path, value, _reason=compiled_path)` → BindingManager notifies all subscribers except the originator.
+
+### Anti-Loop via `_reason`
+
+When a widget writes to data, it passes its compiled path as `_reason`. The BindingManager skips updating the node whose path matches the reason. Other widgets bound to the same data path update normally.
+
+## Store (Bag-driven Widgets)
+
+The `store` attribute on a widget receives a Bag object. At mount time:
+
+1. The Bag reference is saved on the widget (`widget._store`)
+2. A subscription is registered on the Bag
+3. When the Bag changes, the widget repopulates (e.g., Tree clears and rebuilds, preserving expanded state)
+
+```python
+page.tree(label="data", store=self.data)
+```
+
+## System Data
+
+Use `_system` prefix for infrastructure data (drawer state, inspector config) to separate from application data:
+
+```python
+self.data["_system.drawer.width"] = 40
+self.data["_system.drawer.display"] = "block"
+```
 
 ## Extending the Builder
 
-Use mixins (not subclasses) to add custom elements:
+Use mixins to add custom elements:
 
 ```python
 class MyMixin:
@@ -108,5 +156,4 @@ class MyApp(TextualApp):
     builder_class = MyBuilder
 ```
 
-The mixin pattern works because `_pop_decorated_methods` collects
-decorators from non-BagBuilderBase bases in the MRO.
+The mixin pattern works because `_pop_decorated_methods` collects decorators from non-BagBuilderBase bases in the MRO.
