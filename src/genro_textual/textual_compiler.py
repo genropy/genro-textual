@@ -161,6 +161,7 @@ class TextualCompiler(BagCompilerBase):
         from textual.widgets import TabbedContent
 
         attr = dict(node.attr)
+        initial = attr.pop("initial", "")
         kwargs = self._filter_kwargs_for_signature(attr, TabbedContent.__init__)
 
         if "id" not in kwargs:
@@ -169,9 +170,17 @@ class TextualCompiler(BagCompilerBase):
         widget = TabbedContent(**kwargs)
         self._mount(node, widget, parent_widget)
 
+        first_pane_id = None
         if isinstance(node.value, Bag):
             for child_node in node.value:
                 self._render_tabpane(child_node, widget)
+                if first_pane_id is None:
+                    w = child_node.compiled.get("widget")
+                    first_pane_id = w.id if w else None
+
+        target_id = initial or first_pane_id
+        if target_id:
+            widget.call_after_refresh(setattr, widget, "active", target_id)
 
     def _render_tabpane(self, node: BagNode, tabbed_content: Widget) -> None:
         """TabPane added to TabbedContent via add_pane()."""

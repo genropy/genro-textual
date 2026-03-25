@@ -157,12 +157,24 @@ class TestMixinInheritance:
 class TestCompiler:
     """Test TextualCompiler compile phase (no rendering)."""
 
+    def _compile(self, page, data=None):
+        """Helper: compile with new API signature."""
+        from genro_builders.binding import BindingManager
+        if data is None:
+            data = Bag()
+            data.set_backref()
+        compiler = TextualCompiler(page.builder)
+        binding = BindingManager()
+        compiled = BuilderBag(builder=TextualBuilder)
+        compiled.set_backref()
+        compiler.compile(page, compiled, data, binding)
+        return compiled
+
     def test_compile_basic(self):
         page = BuilderBag(builder=TextualBuilder)
         page.static("Hello")
         page.button("OK")
-        compiler = TextualCompiler(page.builder)
-        compiled = compiler.compile(page)
+        compiled = self._compile(page)
         assert len(compiled) == 2
         nodes = list(compiled)
         assert nodes[0].node_tag == "static"
@@ -172,9 +184,9 @@ class TestCompiler:
         page = BuilderBag(builder=TextualBuilder)
         page.static("^greeting")
         data = Bag()
+        data.set_backref()
         data["greeting"] = "Hello!"
-        compiler = TextualCompiler(page.builder)
-        compiled = compiler.compile(page, data)
+        compiled = self._compile(page, data)
         node = list(compiled)[0]
         assert node.value == "Hello!"
 
@@ -182,17 +194,16 @@ class TestCompiler:
         page = BuilderBag(builder=TextualBuilder)
         page.input(value="^form.name", placeholder="Name")
         data = Bag()
+        data.set_backref()
         data["form.name"] = "Giovanni"
-        compiler = TextualCompiler(page.builder)
-        compiled = compiler.compile(page, data)
+        compiled = self._compile(page, data)
         node = list(compiled)[0]
         assert node.attr["value"] == "Giovanni"
 
     def test_compile_expands_component(self):
         page = BuilderBag(builder=TextualBuilder)
         page.fieldset(title="User Info")
-        compiler = TextualCompiler(page.builder)
-        compiled = compiler.compile(page)
+        compiled = self._compile(page)
         node = list(compiled)[0]
         assert node.node_tag == "fieldset"
         assert isinstance(node.value, Bag)
@@ -205,8 +216,7 @@ class TestCompiler:
         page.css(".x { color: red; }")
         page.binding(key="q", action="quit", description="Quit")
         page.static("Hello")
-        compiler = TextualCompiler(page.builder)
-        compiled = compiler.compile(page)
+        compiled = self._compile(page)
         tags = [n.node_tag for n in compiled]
         assert tags == ["css", "binding", "static"]
 
