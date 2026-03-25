@@ -83,11 +83,17 @@ class LiveApp(App):
     # --- Event delegation to owner ---
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        if self.owner._shell_active:
+            if self.owner._handle_shell_button(event):
+                return
         handler = getattr(self.owner, "on_button_pressed", None)
         if handler:
             handler(event)
 
     def on_key(self, event: Any) -> None:
+        if self.owner._shell_active:
+            if self.owner._handle_shell_key(event):
+                return
         handler = getattr(self.owner, "on_key", None)
         if handler:
             handler(event)
@@ -135,6 +141,7 @@ class TextualApp(BagAppBase):
     def __init__(self, remote_port: int | None = None) -> None:
         super().__init__()
         self._live_app: LiveApp | None = None
+        self._shell_active = False
         if remote_port is not None:
             from genro_textual.remote import RemoteServer
             self._remote_server: RemoteServer | None = RemoteServer(self, remote_port)
@@ -158,6 +165,129 @@ class TextualApp(BagAppBase):
 
     def recipe(self, page: BuilderBag) -> None:
         """Override to build your UI. page is a BuilderBag with TextualBuilder."""
+
+    def app_shell(self, page: BuilderBag, title: str = "App") -> Any:
+        """Build an application shell with header, content area, and inspector drawer.
+
+        Returns the content area (verticalscroll) where the user adds widgets.
+
+        Args:
+            page: The page BuilderBag.
+            title: Title shown in the header bar.
+
+        Usage::
+
+            def recipe(self, page):
+                content = self.app_shell(page, title="My App")
+                content.static("My content")
+                content.input(value="^form.name")
+        """
+        page.css("""
+            #shell-header {
+                height: 1; background: $primary; color: $text;
+            }
+            #shell-header Static { width: 1fr; padding: 0 1; }
+            #shell-main { height: 1fr; }
+            #shell-content { width: 1fr; }
+            #shell-drawer {
+                background: $surface;
+                border-left: solid $primary;
+            }
+            #drawer-topbar {
+                height: 1; background: $primary-darken-2;
+            }
+            #drawer-title {
+                width: 1fr; padding: 0 1; color: $text;
+            }
+            .drawer-btn {
+                min-width: 3; height: 1; border: none;
+                padding: 0; background: transparent;
+                color: $text-muted;
+            }
+            .drawer-btn:hover {
+                color: $text; background: transparent;
+            }
+        """)
+        page.binding(key="q", action="quit", description="Quit")
+        page.binding(
+            key="f12", action="toggle_drawer",
+            description="Inspector",
+        )
+
+        header = page.horizontal(id="shell-header")
+        header.static(title)
+
+        main = page.horizontal(id="shell-main")
+
+        content = main.verticalscroll(id="shell-content")
+
+        drawer = main.vertical(
+            id="shell-drawer",
+            width="^_system.drawer.width",
+            display="^_system.drawer.display",
+        )
+        topbar = drawer.horizontal(id="drawer-topbar")
+        topbar.static("Inspector", id="drawer-title")
+        topbar.button(
+            "\u25c0", id="btn-drawer-expand",
+            classes="drawer-btn",
+        )
+        topbar.button(
+            "\u25b6", id="btn-drawer-shrink",
+            classes="drawer-btn",
+        )
+
+        tabs = drawer.tabbedcontent()
+        tabs.tabpane(title="Data", id="tab-data").tree(
+            label="data", store=self.data,
+        )
+        tabs.tabpane(title="Source", id="tab-source").tree(
+            label="source", store=self.source,
+        )
+        tabs.tabpane(
+            title="Compiled", id="tab-compiled",
+        ).tree(label="compiled", store=self.compiled)
+
+        page.footer(show_command_palette=False)
+
+        self._shell_active = True
+        return content
+
+    _DRAWER_WIDTH_DEFAULT = 40
+    _DRAWER_WIDTH_MIN = 20
+    _DRAWER_WIDTH_MAX = 80
+    _DRAWER_WIDTH_STEP = 5
+
+    def _init_shell_data(self) -> None:
+        """Initialize _system data for the shell drawer."""
+        self.data["_system.drawer.width"] = self._DRAWER_WIDTH_DEFAULT
+        self.data["_system.drawer.display"] = "block"
+
+    def _handle_shell_key(self, event: Any) -> bool:
+        """Handle shell key events. Returns True if handled."""
+        if event.key == "f12":
+            current = self.data["_system.drawer.display"]
+            new = "none" if current == "block" else "block"
+            self.data["_system.drawer.display"] = new
+            return True
+        return False
+
+    def _handle_shell_button(self, event: Any) -> bool:
+        """Handle shell button events. Returns True if handled."""
+        bid = event.button.id
+        if bid not in ("btn-drawer-expand", "btn-drawer-shrink"):
+            return False
+        current = self.data["_system.drawer.width"]
+        current = current or self._DRAWER_WIDTH_DEFAULT
+        if bid == "btn-drawer-shrink":
+            new = max(self._DRAWER_WIDTH_MIN,
+                      current - self._DRAWER_WIDTH_STEP)
+        else:
+            new = min(self._DRAWER_WIDTH_MAX,
+                      current + self._DRAWER_WIDTH_STEP)
+        if new != current:
+            self.data["_system.drawer.width"] = new
+        return True
 
     def render(self, compiled_bag: Bag) -> None:
         """Mount widgets from CompiledBag into the LiveApp.

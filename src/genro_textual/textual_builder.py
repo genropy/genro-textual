@@ -543,6 +543,7 @@ class TextualWidgetsMixin:
             comp.static(title)
 
 
+
 class TextualBuilder(TextualWidgetsMixin, BagBuilderBase):
     """Builder for Textual TUI elements.
 
