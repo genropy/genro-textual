@@ -9,6 +9,7 @@ build:
     python: "3.11"
   jobs:
     post_install:
+      - pip install "genro-builders @ git+https://github.com/genropy/genro-builders.git@main"
       - pip install -e ".[docs]"
 
 sphinx:
