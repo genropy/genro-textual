@@ -60,6 +60,24 @@ Genro Textual wraps 60+ Textual widgets as builder elements. All are available a
 | `header()` | Header | App header bar |
 | `footer()` | Footer | Footer with bindings |
 
+## Components
+
+Components are reusable composite elements defined with `@component` in mixin classes. They live in `genro_textual.components`.
+
+| Method | Mixin | Slots | Description |
+| ------ | ----- | ----- | ----------- |
+| `app_shell(title, ...)` | FoundationMixin | `content` | Full app layout with inspector drawer |
+| `fieldset(title)` | TextualWidgetsMixin | — | Group of fields with title |
+| `form(title)` | TextualWidgetsMixin | — | Form container |
+
+Components can declare **named slots** — insertion points where the caller adds content:
+
+```python
+shell = page.app_shell(title="My App", data_store=self.data)
+shell.content.static("Hello!")     # adds to the 'content' slot
+shell.content.input(value="^name") # also in the 'content' slot
+```
+
 ## Config (Non-Widget)
 
 | Method | Description |
