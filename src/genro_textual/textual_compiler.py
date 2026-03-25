@@ -22,7 +22,11 @@ from typing import Any
 
 from genro_bag import Bag, BagNode
 from genro_builders.compiler import BagCompilerBase
+from textual.css.styles import RulesMap
+from textual.reactive import Reactive
 from textual.widget import Widget
+
+_CSS_PROPERTIES = set(RulesMap.__annotations__.keys())
 
 
 class TextualCompiler(BagCompilerBase):
@@ -111,10 +115,11 @@ class TextualCompiler(BagCompilerBase):
         module = import_module(module_name)
         textual_class = getattr(module, class_name)
 
-        kwargs = self._filter_kwargs_for_signature(attr, textual_class.__init__)
+        # Separate attributes into constructor args, CSS styles, reactive attrs
+        init_kwargs, style_attrs, reactive_attrs = self._classify_attrs(attr, textual_class)
 
-        if "id" not in kwargs:
-            kwargs["id"] = f"{tag}_{self.widget_counter}"
+        if "id" not in init_kwargs:
+            init_kwargs["id"] = f"{tag}_{self.widget_counter}"
 
         if isinstance(node.value, Bag):
             content = ""
@@ -122,10 +127,12 @@ class TextualCompiler(BagCompilerBase):
             content = str(node.value) if node.value else ""
 
         first_param = self._first_positional_param(textual_class.__init__)
-        if content and first_param and first_param not in kwargs:
-            kwargs[first_param] = content
+        if content and first_param and first_param not in init_kwargs:
+            init_kwargs[first_param] = content
 
-        widget = textual_class(**kwargs)
+        widget = textual_class(**init_kwargs)
+        self._apply_styles(widget, style_attrs)
+        self._apply_reactive(widget, reactive_attrs)
         self._mount(node, widget, parent_widget)
 
         if isinstance(node.value, Bag):
@@ -185,6 +192,40 @@ class TextualCompiler(BagCompilerBase):
             for child_node in node.value:
                 self._render_node(child_node, widget)
 
+    def _render_tree(self, node: BagNode, parent_widget: Widget) -> None:
+        """Tree widget: populate from store attribute if it's a Bag.
+
+        Subscribes to the store Bag so the tree repopulates on changes.
+        """
+        from textual.widgets import Tree
+
+        attr = dict(node.attr)
+        store = attr.pop("store", None)
+        label = attr.pop("label", None) or "Tree"
+        kwargs = self._filter_kwargs_for_signature(attr, Tree.__init__)
+
+        if "id" not in kwargs:
+            kwargs["id"] = f"tree_{self.widget_counter}"
+
+        widget = Tree(label, **kwargs)
+        self._mount(node, widget, parent_widget)
+
+        if isinstance(store, Bag):
+            self._populate_tree_from_bag(widget.root, store)
+            widget.set_timer(0.1, widget.refresh)
+
+    def _populate_tree_from_bag(self, tree_node: Any, bag: Bag) -> None:
+        """Recursively populate a TreeNode from a Bag."""
+        for bag_node in bag:
+            label = bag_node.label
+            value = bag_node.static_value if hasattr(bag_node, "static_value") else bag_node.value
+            if isinstance(value, Bag):
+                child = tree_node.add(f"{label}", data=bag_node)
+                self._populate_tree_from_bag(child, value)
+            else:
+                display = f"{label}: {value}" if value is not None else label
+                tree_node.add_leaf(display, data=bag_node)
+
     def _render_datatable(self, node: BagNode, parent_widget: Widget) -> None:
         """DataTable: columns and rows via add_column/add_row."""
         from textual.widgets import DataTable
@@ -231,10 +272,108 @@ class TextualCompiler(BagCompilerBase):
     # -------------------------------------------------------------------------
 
     def _mount(self, node: BagNode, widget: Widget, parent_widget: Widget) -> None:
-        """Mount widget to parent and store bidirectional references."""
+        """Mount widget to parent, store bidirectional references, bind store."""
         node.compiled["widget"] = widget
         widget._bag_node = node  # type: ignore[attr-defined]
+
+        # If the node has a store attribute (a Bag), proxy it on the widget
+        # and subscribe for reactive updates
+        store = node.attr.get("store")
+        if isinstance(store, Bag):
+            from genro_textual.debug import log
+            widget._store = store  # type: ignore[attr-defined]
+            subscriber_id = f"store_{widget.id or id(widget)}"
+            store.subscribe(subscriber_id, any=lambda **kw: self._on_store_changed(widget, store))
+            log(f"_mount: subscribed {subscriber_id} on {widget.id}")
+
         parent_widget.mount(widget)
+
+    def _on_store_changed(self, widget: Widget, store: Bag) -> None:
+        """Called when a store Bag changes. Repopulate preserving expanded state."""
+        from textual.widgets import Tree
+
+        if isinstance(widget, Tree):
+            expanded_paths = self._collect_expanded_paths(widget.root, "")
+            widget.clear()
+            self._populate_tree_from_bag(widget.root, store)
+            self._restore_expanded_paths(widget.root, "", expanded_paths)
+            widget.set_timer(0.1, widget.refresh)
+
+    def _collect_expanded_paths(self, tree_node: Any, prefix: str) -> set[str]:
+        """Collect paths of expanded tree nodes."""
+        expanded = set()
+        for child in tree_node.children:
+            path = f"{prefix}.{child.label}" if prefix else str(child.label)
+            if child.is_expanded:
+                expanded.add(path)
+                expanded.update(self._collect_expanded_paths(child, path))
+        return expanded
+
+    def _restore_expanded_paths(self, tree_node: Any, prefix: str, expanded: set[str]) -> None:
+        """Restore expanded state on tree nodes matching saved paths."""
+        for child in tree_node.children:
+            path = f"{prefix}.{child.label}" if prefix else str(child.label)
+            if path in expanded:
+                child.expand()
+                self._restore_expanded_paths(child, path, expanded)
+
+    # -------------------------------------------------------------------------
+    # Attribute classification and application
+    # -------------------------------------------------------------------------
+
+    def _classify_attrs(
+        self, attr: dict[str, Any], textual_class: type
+    ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+        """Classify node attributes into constructor args, CSS styles, reactive attrs.
+
+        Returns:
+            (init_kwargs, style_attrs, reactive_attrs)
+        """
+        init_kwargs: dict[str, Any] = {}
+        style_attrs: dict[str, Any] = {}
+        reactive_attrs: dict[str, Any] = {}
+
+        init_params = self._get_init_params(textual_class)
+
+        for key, value in attr.items():
+            if key.startswith("_"):
+                continue
+            if key in init_params:
+                init_kwargs[key] = value
+            elif key in _CSS_PROPERTIES:
+                style_attrs[key] = value
+            elif isinstance(getattr(textual_class, key, None), Reactive):
+                reactive_attrs[key] = value
+            else:
+                # Fallback: try as init kwarg if **kwargs accepted
+                if self._has_var_keyword(textual_class):
+                    init_kwargs[key] = value
+
+        return init_kwargs, style_attrs, reactive_attrs
+
+    def _apply_styles(self, widget: Widget, style_attrs: dict[str, Any]) -> None:
+        """Apply CSS style attributes to widget.styles."""
+        for key, value in style_attrs.items():
+            setattr(widget.styles, key, value)
+
+    def _apply_reactive(self, widget: Widget, reactive_attrs: dict[str, Any]) -> None:
+        """Apply reactive attributes to the widget without triggering watchers."""
+        for key, value in reactive_attrs.items():
+            descriptor = getattr(type(widget), key, None)
+            if isinstance(descriptor, Reactive):
+                widget.set_reactive(descriptor, value)
+
+    def _get_init_params(self, textual_class: type) -> set[str]:
+        """Get the set of parameter names accepted by __init__."""
+        sig = inspect.signature(textual_class.__init__)
+        return set(sig.parameters.keys()) - {"self"}
+
+    def _has_var_keyword(self, textual_class: type) -> bool:
+        """Check if __init__ accepts **kwargs."""
+        sig = inspect.signature(textual_class.__init__)
+        return any(
+            p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+        )
 
     # -------------------------------------------------------------------------
     # Signature introspection

@@ -34,13 +34,22 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.10",
 ]
+docs = [
+    "sphinx>=8.0.0",
+    "sphinx-rtd-theme>=3.0.0",
+    "sphinx-autodoc-typehints>=3.0.0",
+    "myst-parser>=4.0.0",
+    "sphinxcontrib-mermaid>=1.0.0",
+]
 
 [project.scripts]
 pygui = "genro_textual.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/genropy/genro-textual"
+Documentation = "https://genro-textual.readthedocs.io"
 Repository = "https://github.com/genropy/genro-textual"
+Issues = "https://github.com/genropy/genro-textual/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/genro_textual"]

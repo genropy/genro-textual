@@ -18,7 +18,13 @@ Lifecycle:
     2. run() → creates LiveApp, starts Textual event loop
     3. LiveApp.on_mount() → setup() = recipe + compile + bind + render
     4. Data changes → BindingManager updates node → widget update
-    5. Widget changes → _on_widget_changed → data update (bidirectional)
+    5. Widget blur/change → _on_widget_changed → data update (bidirectional)
+
+Bidirectional binding:
+    - Input widgets write to data on blur (not on every keystroke)
+    - Checkbox/Switch write to data on change (immediate)
+    - Anti-loop: _reason parameter prevents updating the originating widget
+    - Thread safety: call_from_thread only when called from a different thread
 
 Example:
     from genro_textual import TextualApp
@@ -34,11 +40,13 @@ Example:
 """
 from __future__ import annotations
 
+import threading
 from typing import TYPE_CHECKING, Any
 
 from genro_bag import Bag, BagNode
 from genro_builders.app import BagAppBase
 from genro_builders.builder_bag import BuilderBag
+from textual import events
 from textual.app import App
 from textual.containers import Vertical
 from textual.widgets import Button, Checkbox, Input, Static, Switch
@@ -55,7 +63,7 @@ class LiveApp(App):
 
     Has no CSS or BINDINGS of its own — those come from the recipe
     and are applied by the compiler at render time.
-    Delegates all events to the owner (TextualApp).
+    Delegates events to the owner (TextualApp).
     """
 
     BINDINGS = [("q", "quit", "Quit")]
@@ -84,8 +92,19 @@ class LiveApp(App):
         if handler:
             handler(event)
 
+    def on_descendant_blur(self, event: events.DescendantBlur) -> None:
+        """Write Input value to data on blur (not on every keystroke)."""
+        from genro_textual.debug import log
+        widget = event.widget
+        log(f"on_descendant_blur: {widget.__class__.__name__} id={widget.id}")
+        if isinstance(widget, Input):
+            log(f"  blur Input value={widget.value!r}")
+            self.owner._on_widget_changed(widget, widget.value)
+        handler = getattr(self.owner, "on_descendant_blur", None)
+        if handler:
+            handler(event)
+
     def on_input_changed(self, event: Input.Changed) -> None:
-        self.owner._on_widget_changed(event.input, event.value)
         handler = getattr(self.owner, "on_input_changed", None)
         if handler:
             handler(event)
@@ -116,7 +135,6 @@ class TextualApp(BagAppBase):
     def __init__(self, remote_port: int | None = None) -> None:
         super().__init__()
         self._live_app: LiveApp | None = None
-        self._updating_from_widget = False
         if remote_port is not None:
             from genro_textual.remote import RemoteServer
             self._remote_server: RemoteServer | None = RemoteServer(self, remote_port)
@@ -142,7 +160,11 @@ class TextualApp(BagAppBase):
         """Override to build your UI. page is a BuilderBag with TextualBuilder."""
 
     def render(self, compiled_bag: Bag) -> None:
-        """Mount widgets from CompiledBag into the LiveApp."""
+        """Mount widgets from CompiledBag into the LiveApp.
+
+        Overrides BagAppBase.render() — Textual rendering is imperative
+        (mount widgets), not string-based.
+        """
         if self._live_app is None or self._live_app.root is None:
             return None
         self._live_app.root.remove_children()
@@ -152,22 +174,30 @@ class TextualApp(BagAppBase):
     def _on_node_updated(self, node: BagNode) -> None:
         """Called by BindingManager when a bound node changes.
 
-        Uses call_from_thread for thread safety — the binding callback
-        may arrive from a different thread (remote, timer).
-        Updates the specific widget, not the entire tree.
+        Uses call_from_thread only when called from a different thread
+        (e.g. remote REPL, timer). Same-thread calls update directly.
         """
-        if self._updating_from_widget or not self._auto_compile:
+        if not self._auto_compile:
             return
         widget = node.compiled.get("widget")
         if widget is None:
             return
-        if self._live_app is not None:
+        if self._live_app is not None and self._live_app._thread_id != threading.get_ident():
             self._live_app.call_from_thread(self._update_widget, node, widget)
         else:
             self._update_widget(node, widget)
 
     def _update_widget(self, node: BagNode, widget: Any) -> None:
-        """Apply node value/attr changes to the Textual widget."""
+        """Apply node value/attr changes to the Textual widget.
+
+        Handles both value updates and CSS/reactive attribute updates.
+        """
+        from textual.css.styles import RulesMap
+        from textual.reactive import Reactive
+
+        css_properties = RulesMap.__annotations__
+
+        # Update value
         value = node.value
         if isinstance(widget, Static):
             widget.update(str(value) if value is not None else "")
@@ -178,22 +208,57 @@ class TextualApp(BagAppBase):
         elif hasattr(widget, "label"):
             widget.label = str(value) if value is not None else ""
 
-    def _on_widget_changed(self, widget: Any, value: Any) -> None:
-        """Called by LiveApp when a widget value changes (bidirectional binding).
+        # Update CSS style attributes
+        for key, attr_value in node.attr.items():
+            if key.startswith("_"):
+                continue
+            if key in css_properties:
+                setattr(widget.styles, key, attr_value)
+            elif isinstance(getattr(type(widget), key, None), Reactive):
+                widget.set_reactive(getattr(type(widget), key), attr_value)
 
-        Writes the new value back to the data Bag. The _updating_from_widget
-        flag prevents the loop: widget→data→binding→widget.
+    def _on_widget_changed(self, widget: Any, value: Any) -> None:
+        """Called by LiveApp on blur (Input) or change (Checkbox/Switch).
+
+        Writes the widget value back to the data Bag using _reason
+        for anti-loop: the BindingManager skips the originating node.
+
+        Finds the data path by reverse-lookup in the subscription map:
+        searches for the compiled node path in the map values.
         """
+        from genro_textual.debug import log
         node = getattr(widget, "_bag_node", None)
+        log(f"_on_widget_changed: {type(widget).__name__} v={value!r} node={node is not None}")
         if node is None:
             return
-        bindings = node.compiled.get("bindings", [])
-        for b in bindings:
-            if b["location"] == "value":
-                self._updating_from_widget = True
-                node._set_relative_data(self.data, b["pointer_info"].raw[1:], value)
-                self._updating_from_widget = False
-                break
+        # Find compiled path of this node
+        compiled_path = self._find_compiled_path(node)
+        log(f"  compiled_path={compiled_path!r}")
+        if not compiled_path:
+            return
+        # Reverse-lookup: find data_key for this compiled entry
+        data_path = self._find_data_path(compiled_path)
+        log(f"  data_path={data_path!r}")
+        if data_path:
+            log(f"  writing data[{data_path!r}] = {value!r} with reason={compiled_path!r}")
+            self.data.set_item(data_path, value, _reason=compiled_path)
+
+    def _find_compiled_path(self, node: BagNode) -> str | None:
+        """Find the path of a node relative to the compiled Bag."""
+        return self.compiled.relative_path(node)
+
+    def _find_data_path(self, compiled_path: str) -> str | None:
+        """Reverse-lookup: find the data path bound to a compiled entry.
+
+        Searches for compiled_path or compiled_path?value in the map.
+        """
+        smap = self._binding.subscription_map
+        # Check for attr:value binding (e.g. input with value="^path")
+        entry_with_attr = f"{compiled_path}?value"
+        for data_key, entries in smap.items():
+            if entry_with_attr in entries or compiled_path in entries:
+                return data_key.partition("?")[0]
+        return None
 
     def run(self) -> None:
         """Run the Textual app."""

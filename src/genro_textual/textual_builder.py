@@ -494,8 +494,15 @@ class TextualWidgetsMixin:
         ...
 
     @element(sub_tags="", compile_module="textual.widgets", compile_class="Tree")
-    def tree(self, content: str = "", label: str | None = None, data: str | None = None):
-        """A widget for displaying and navigating data in a tree."""
+    def tree(
+        self, content: str = "", label: str | None = None,
+        data: str | None = None, store: object | None = None,
+    ):
+        """A widget for displaying and navigating data in a tree.
+
+        Args:
+            store: A Bag object. The tree is populated recursively from its structure.
+        """
         ...
 
     @element(sub_tags="", compile_module="textual.widgets", compile_class="Welcome")
