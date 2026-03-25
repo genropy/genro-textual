@@ -166,93 +166,6 @@ class TextualApp(BagAppBase):
     def recipe(self, page: BuilderBag) -> None:
         """Override to build your UI. page is a BuilderBag with TextualBuilder."""
 
-    def app_shell(self, page: BuilderBag, title: str = "App") -> Any:
-        """Build an application shell with header, content area, and inspector drawer.
-
-        Returns the content area (verticalscroll) where the user adds widgets.
-
-        Args:
-            page: The page BuilderBag.
-            title: Title shown in the header bar.
-
-        Usage::
-
-            def recipe(self, page):
-                content = self.app_shell(page, title="My App")
-                content.static("My content")
-                content.input(value="^form.name")
-        """
-        page.css("""
-            #shell-header {
-                height: 1; background: $primary; color: $text;
-            }
-            #shell-header Static { width: 1fr; padding: 0 1; }
-            #shell-main { height: 1fr; }
-            #shell-content { width: 1fr; }
-            #shell-drawer {
-                background: $surface;
-                border-left: solid $primary;
-            }
-            #drawer-topbar {
-                height: 1; background: $primary-darken-2;
-            }
-            #drawer-title {
-                width: 1fr; padding: 0 1; color: $text;
-            }
-            .drawer-btn {
-                min-width: 3; height: 1; border: none;
-                padding: 0; background: transparent;
-                color: $text-muted;
-            }
-            .drawer-btn:hover {
-                color: $text; background: transparent;
-            }
-        """)
-        page.binding(key="q", action="quit", description="Quit")
-        page.binding(
-            key="f12", action="toggle_drawer",
-            description="Inspector",
-        )
-
-        header = page.horizontal(id="shell-header")
-        header.static(title)
-
-        main = page.horizontal(id="shell-main")
-
-        content = main.verticalscroll(id="shell-content")
-
-        drawer = main.vertical(
-            id="shell-drawer",
-            width="^_system.drawer.width",
-            display="^_system.drawer.display",
-        )
-        topbar = drawer.horizontal(id="drawer-topbar")
-        topbar.static("Inspector", id="drawer-title")
-        topbar.button(
-            "\u25c0", id="btn-drawer-expand",
-            classes="drawer-btn",
-        )
-        topbar.button(
-            "\u25b6", id="btn-drawer-shrink",
-            classes="drawer-btn",
-        )
-
-        tabs = drawer.tabbedcontent()
-        tabs.tabpane(title="Data", id="tab-data").tree(
-            label="data", store=self.data,
-        )
-        tabs.tabpane(title="Source", id="tab-source").tree(
-            label="source", store=self.source,
-        )
-        tabs.tabpane(
-            title="Compiled", id="tab-compiled",
-        ).tree(label="compiled", store=self.compiled)
-
-        page.footer(show_command_palette=False)
-
-        self._shell_active = True
-        return content
-
     _DRAWER_WIDTH_DEFAULT = 40
     _DRAWER_WIDTH_MIN = 20
     _DRAWER_WIDTH_MAX = 80
@@ -262,6 +175,7 @@ class TextualApp(BagAppBase):
         """Initialize _system data for the shell drawer."""
         self.data["_system.drawer.width"] = self._DRAWER_WIDTH_DEFAULT
         self.data["_system.drawer.display"] = "block"
+        self._shell_active = True
 
     def _handle_shell_key(self, event: Any) -> bool:
         """Handle shell key events. Returns True if handled."""

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "genro-textual"
-version = "0.3.0"
+version = "0.4.0"
 description = "Textual UI framework for Genro Bag-driven applications"
 readme = "README.md"
 license = "Apache-2.0"
@@ -22,7 +22,7 @@ classifiers = [
 ]
 dependencies = [
     "genro-bag>=0.11.0",
-    "genro-builders>=0.4.0",
+    "genro-builders>=0.7.0",
     "textual>=0.47.0",
     "watchfiles>=0.21.0",
 ]

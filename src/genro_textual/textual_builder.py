@@ -1,16 +1,21 @@
 # Copyright 2025 Softwell S.r.l. - SPDX-License-Identifier: Apache-2.0
 """TextualBuilder - Builder for Textual TUI widgets.
 
-Elements and components are defined in TextualWidgetsMixin so that
-subclasses of TextualBuilder inherit the full schema. This follows
-the genro-builders mixin pattern: _pop_decorated_methods collects
-decorators from mixin bases (non-BagBuilderBase) in the MRO.
+Elements and components are defined in mixins so that subclasses of
+TextualBuilder inherit the full schema. This follows the genro-builders
+mixin pattern: _pop_decorated_methods collects decorators from mixin
+bases (non-BagBuilderBase) in the MRO.
+
+Component mixins live in genro_textual.components — each file is
+a mixin that can be included or excluded when composing a builder.
 
 No rendering logic here — that belongs in TextualCompiler.
 """
 from __future__ import annotations
 
 from genro_builders.builder import BagBuilderBase, component, element
+
+from genro_textual.components.foundation import FoundationMixin
 
 
 class TextualWidgetsMixin:
@@ -544,13 +549,15 @@ class TextualWidgetsMixin:
 
 
 
-class TextualBuilder(TextualWidgetsMixin, BagBuilderBase):
+class TextualBuilder(FoundationMixin, TextualWidgetsMixin, BagBuilderBase):
     """Builder for Textual TUI elements.
 
-    All @element and @component definitions live in TextualWidgetsMixin.
-    Subclass TextualBuilder freely — the mixin schema is inherited via MRO.
+    Includes FoundationMixin (app_shell) and TextualWidgetsMixin (all widgets).
+    Subclass TextualBuilder freely — mixin schemas are inherited via MRO.
 
-    To add custom components, define them in a mixin:
+    To add custom components, define them in a mixin::
+
+        from genro_builders.builder import component
 
         class MyMixin:
             @component(sub_tags="")
@@ -559,5 +566,10 @@ class TextualBuilder(TextualWidgetsMixin, BagBuilderBase):
                 comp.button("Login")
 
         class MyBuilder(MyMixin, TextualBuilder):
+            pass
+
+    To exclude FoundationMixin, compose your own builder::
+
+        class MinimalBuilder(TextualWidgetsMixin, BagBuilderBase):
             pass
     """

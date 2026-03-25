@@ -1,7 +1,7 @@
 # Copyright 2025 Softwell S.r.l. - SPDX-License-Identifier: Apache-2.0
-"""POC: App shell with inspector drawer.
+"""POC: App shell with inspector drawer using component slots.
 
-Uses self.app_shell() for the full structure: header, content, drawer, footer.
+Uses the app_shell component from FoundationMixin with named slot 'content'.
 
 Run with:
     python examples/poc_drawer.py
@@ -14,14 +14,19 @@ class Application(TextualApp):
     """App using the built-in shell with inspector."""
 
     def recipe(self, page):
-        content = self.app_shell(page, title="My Application")
+        shell = page.app_shell(
+            title="My Application",
+            data_store=self.data,
+            source_store=self.source,
+            compiled_store=self.compiled,
+        )
 
-        content.static("^greeting")
-        content.input(value="^form.name", placeholder="Name")
-        content.input(value="^form.surname", placeholder="Surname")
-        content.static("")
+        shell.content.static("^greeting")
+        shell.content.input(value="^form.name", placeholder="Name")
+        shell.content.input(value="^form.surname", placeholder="Surname")
+        shell.content.static("")
         for i in range(1, 10):
-            content.static(f"  Content line {i}")
+            shell.content.static(f"  Content line {i}")
 
     def setup(self):
         self._init_shell_data()

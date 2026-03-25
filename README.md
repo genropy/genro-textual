@@ -126,36 +126,31 @@ When `data["_system.panel.width"]` changes, the widget resizes. Style attributes
 
 Note: CSS variables (`$surface`, `$primary`) work only in `page.css()`, not in direct attributes.
 
-## Inspector Drawer
+## App Shell
 
-Built-in inspector for debugging Bag structures at runtime:
+The `app_shell` component provides a complete application layout with header, scrollable content area, resizable inspector drawer (Data/Source/Compiled tree tabs), and footer:
 
 ```python
 class Application(TextualApp):
     def recipe(self, page):
-        page.header()
-        main = page.horizontal(id="main-area")
-
-        content = main.verticalscroll(id="main-content")
-        content.static("My app content")
-
-        # Drawer with inspector
-        drawer = main.vertical(
-            id="drawer",
-            width="^_system.drawer.width",
-            display="^_system.drawer.display",
+        shell = page.app_shell(
+            title="My App",
+            data_store=self.data,
+            source_store=self.source,
+            compiled_store=self.compiled,
         )
-        tabs = drawer.tabbedcontent()
-        tabs.tabpane(title="Data").tree(label="data", store=self.data)
-        tabs.tabpane(title="Source").tree(label="source", store=self.source)
-        tabs.tabpane(title="Compiled").tree(label="compiled", store=self.compiled)
+        shell.content.static("Hello!")
+        shell.content.input(value="^form.name", placeholder="Name")
 
-        page.footer()
+    def setup(self):
+        self._init_shell_data()
+        self.data["form.name"] = "John"
+        super().setup()
 ```
 
-The Tree widget with `store` attribute populates recursively from a Bag and updates reactively when the Bag changes, preserving expanded state.
+The `content` slot is a named insertion point — widgets added to `shell.content` are mounted inside the scrollable content area. Press **F12** to toggle the inspector drawer.
 
-Use `_system` paths for infrastructure data (drawer width, display) to separate them from application data.
+`app_shell` is defined in `FoundationMixin`, included in `TextualBuilder` by default. To exclude it, compose your own builder without the mixin.
 
 ## Key Bindings
 
@@ -168,7 +163,9 @@ Bindings appear in the Footer and are clickable.
 
 ## Components
 
-Reusable UI blocks defined with `@component`:
+Reusable UI blocks defined with `@component` in mixin classes. Component mixins live in `genro_textual.components`.
+
+### Simple component (no slots)
 
 ```python
 from genro_builders.builder import component
@@ -191,6 +188,35 @@ class Application(TextualApp):
     def recipe(self, page):
         page.login_form(title="Sign In")
 ```
+
+### Component with named slots
+
+Components can declare named slots — insertion points where the caller adds content:
+
+```python
+class DashboardMixin:
+    @component(sub_tags="*", slots=["left", "right"])
+    def dashboard(self, comp, title="", **kwargs):
+        comp.static(title)
+        main = comp.horizontal()
+        left_node = main.vertical(id="left-panel")
+        right_node = main.vertical(id="right-panel")
+        return {"left": left_node, "right": right_node}
+
+class MyBuilder(DashboardMixin, TextualBuilder):
+    pass
+```
+
+Usage in recipe:
+
+```python
+def recipe(self, page):
+    dash = page.dashboard(title="Overview")
+    dash.left.tree(label="nav", store=self.data)
+    dash.right.static("Main content")
+```
+
+The handler body returns a dict mapping slot names to destination nodes. Content added to slots at recipe time is mounted into those nodes at compile time.
 
 ## Live REPL
 
@@ -247,7 +273,7 @@ genro-textual supports **60+ Textual elements**:
 
 ### Components
 
-`fieldset`, `form`
+`fieldset`, `form`, `app_shell` (with `content` slot)
 
 ## License
 
