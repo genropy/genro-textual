@@ -4,27 +4,27 @@
 
 genro-textual follows a strict separation between configuration and execution:
 
-- **TextualApp** (puppeteer) — extends `BagAppBase`. Owns recipe, data, builder, compiler, binding. Creates and drives the LiveApp.
+- **TextualApp** (puppeteer) — extends `BuilderManager`. Owns main, data, builder, build, binding. Creates and drives the LiveApp.
 - **LiveApp** (puppet) — extends `textual.app.App`. No logic of its own. Built and controlled by the puppeteer.
-- **CompiledBag** — the script. Produced by the compiler, kept in sync by BindingManager.
+- **Built Bag** — the script. Produced by the build step, kept in sync by BindingManager.
 
 ## Pipeline
 
 ```mermaid
 graph TD
-    R[recipe] --> SB[Source Bag]
-    SB -->|compile| CB[Compiled Bag]
+    R[main] --> SB[Source Bag]
+    SB -->|build| CB[Built Bag]
     CB -->|render| WT[Widget Tree]
     DB[Data Bag] -->|"binding (data → widget)"| CB
     WT -->|"blur/change (widget → data)"| DB
 ```
 
-### Single-Pass Compilation
+### Single-Pass Build
 
-The compiler walks the source Bag once. For each node:
+The build step walks the source Bag once. For each node:
 1. Clean subscription map for this subtree
 2. Expand component if resolver present
-3. Create node in compiled Bag
+3. Create node in Built Bag
 4. Resolve `^pointers` against data and register in subscription map
 5. Recurse into children
 
@@ -39,7 +39,7 @@ Flat `str → list[str]`:
 }
 ```
 
-Key: data path. Value: compiled node paths (with optional `?attr` suffix).
+Key: data path. Value: built node paths (with optional `?attr` suffix).
 
 ## Modules
 
@@ -53,20 +53,20 @@ Elements include:
 - **Containers**: vertical, horizontal, grid, center, etc.
 - **Widgets**: static, button, input, checkbox, datatable, tree (with store), etc.
 - **App config**: css, binding (not rendered as widgets)
-- **Components**: fieldset, form (expanded at compile time)
+- **Components**: fieldset, form (expanded at build time)
 
 ### textual_compiler.py
 
 `TextualCompiler(BagCompilerBase)`
 
-Inherits `compile()` from base (single-pass: expand + resolve + register).
-Defines its own `render(compiled_bag, live_app)`:
+Inherits `build()` from base (single-pass: expand + resolve + register).
+Defines its own `_do_render(built_bag, live_app)`:
 
 1. Extract `css` nodes → apply to `live_app.stylesheet`
 2. Extract `binding` nodes → call `live_app.bind()`
 3. Render remaining nodes as Textual widgets via `_render_node()`
 
-**Dispatch**: `_render_<tag>` methods for special widgets (tabbedcontent, datatable, static, tree), `_render_default` for generic widgets via compile_kwargs (module + class).
+**Dispatch**: `_render_<tag>` methods for special widgets (tabbedcontent, datatable, static, tree), `_render_default` for generic widgets via _meta (module + class).
 
 **Attribute classification at mount**: for each node attribute:
 1. Constructor parameter → `widget.__init__`
@@ -77,21 +77,21 @@ Defines its own `render(compiled_bag, live_app)`:
 
 ### textual_app.py
 
-`TextualApp(BagAppBase)` — the puppeteer.
+`TextualApp(BuilderManager)` — the puppeteer.
 
-- `page` property exposes source Bag (domain name for Textual)
-- `recipe(page)` — user override
-- `render(compiled_bag)` — mounts widgets via `compiler.render()`
+- `source` property exposes source Bag (domain name for Textual)
+- `main(source)` — user override
+- `_do_render()` — mounts widgets via `compiler._do_render()`
 - `_on_node_updated(node)` — reactive: updates specific widget. Uses `call_from_thread` only when called from a different thread (remote REPL, timer).
 - `_on_widget_changed(widget, value)` — bidirectional: widget → data
-- `_find_compiled_path(node)` — uses `Bag.relative_path()` to find the node path in the compiled Bag
+- `_find_compiled_path(node)` — uses `Bag.relative_path()` to find the node path in the Built Bag
 - `_find_data_path(compiled_path)` — reverse-lookup in subscription map
 - `run()` — creates LiveApp and starts Textual event loop
 
 `LiveApp(App)` — the puppet.
 
 - `compose()` → root Vertical container
-- `on_mount()` → `owner.setup()` (recipe + compile + bind + render)
+- `on_mount()` → `owner.setup()` (store + main + build + subscribe + render)
 - Events delegated to owner: button_pressed, key, descendant_blur, input_changed, checkbox_changed, switch_changed
 
 ## Data Binding
@@ -99,9 +99,9 @@ Defines its own `render(compiled_bag, live_app)`:
 ### Data to Widget (`^pointer`)
 
 ```python
-page.static("^greeting")              # value bound to data["greeting"]
-page.input(value="^form.name")        # attr bound to data["form.name"]
-page.vertical(width="^_system.w")     # CSS property bound to data path
+source.static("^greeting")              # value bound to data["greeting"]
+source.input(value="^form.name")        # attr bound to data["form.name"]
+source.vertical(width="^_system.w")     # CSS property bound to data path
 ```
 
 Flow: `data["greeting"] = "Hello"` → BindingManager → node updated → `_on_node_updated` → widget updated.
@@ -126,7 +126,7 @@ The `store` attribute on a widget receives a Bag object. At mount time:
 3. When the Bag changes, the widget repopulates (e.g., Tree clears and rebuilds, preserving expanded state)
 
 ```python
-page.tree(label="data", store=self.data)
+source.tree(label="data", store=self.data)
 ```
 
 ## System Data

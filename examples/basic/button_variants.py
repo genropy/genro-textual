@@ -15,15 +15,15 @@ from genro_textual import TextualApp
 class Application(TextualApp):
     """Display all button variants."""
 
-    def recipe(self, page):
-        page.static("Button Variants")
-        page.button("Default", id="btn_default")
-        page.button("Primary", id="btn_primary", variant="primary")
-        page.button("Success", id="btn_success", variant="success")
-        page.button("Warning", id="btn_warning", variant="warning")
-        page.button("Error", id="btn_error", variant="error")
-        page.static("")
-        page.static("Click a button or press 'q' to quit")
+    def main(self, source):
+        source.static("Button Variants")
+        source.button("Default", id="btn_default")
+        source.button("Primary", id="btn_primary", variant="primary")
+        source.button("Success", id="btn_success", variant="success")
+        source.button("Warning", id="btn_warning", variant="warning")
+        source.button("Error", id="btn_error", variant="error")
+        source.static("")
+        source.static("Click a button or press 'q' to quit")
 
     def on_button_pressed(self, event: Button.Pressed):
         self._live_app.notify(f"Pressed: {event.button.label}")

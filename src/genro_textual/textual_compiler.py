@@ -1,19 +1,19 @@
 # Copyright 2025 Softwell S.r.l. - SPDX-License-Identifier: Apache-2.0
-"""TextualCompiler - Compiler that renders CompiledBag into Textual widgets.
+"""TextualCompiler - Compiler that turns built Bag into Textual widgets.
 
-Inherits compile() from BagCompilerBase: materialize components + resolve ^pointers.
-Rendering is a separate concern: walk the CompiledBag and mount Widget objects
-to a parent widget. This is fundamentally different from string-based rendering
-(HTML, Markdown) because Textual widgets are imperative objects with parent-child
-mounting, not composable strings.
+Inherits from BagCompilerBase: provides _build_context() for just-in-time
+^pointer resolution. The built Bag retains ^pointer strings; resolution
+happens here at widget creation time.
 
 Rendering dispatch:
     1. _render_<tag> method on this class (for special widgets)
-    2. _render_default: generic rendering via compile_kwargs (module + class)
+    2. _render_default: generic rendering via _meta (module + class)
 
 Each rendered node stores its widget in node.compiled["widget"] so the
-BindingManager can later update it on data changes.
+BindingManager can later update it on data changes. Each widget stores
+widget._bag_node back to the built node (bidirectional link).
 """
+
 from __future__ import annotations
 
 import inspect
@@ -30,7 +30,7 @@ _CSS_PROPERTIES = set(RulesMap.__annotations__.keys())
 
 
 class TextualCompiler(BagCompilerBase):
-    """Compiler for Textual: compile() + render to Widget tree."""
+    """Compiler for Textual: built Bag -> Widget tree."""
 
     def __init__(self, builder: Any) -> None:
         super().__init__(builder)
@@ -44,40 +44,74 @@ class TextualCompiler(BagCompilerBase):
         return current
 
     # -------------------------------------------------------------------------
-    # Rendering: CompiledBag → Widget tree
+    # Main entry point: compile built Bag into widgets
     # -------------------------------------------------------------------------
 
-    def render(self, compiled_bag: Bag, live_app: Any) -> None:
-        """Walk the CompiledBag, extract app config, mount widgets.
+    def compile(self, built_bag: Bag, target: Any = None) -> None:
+        """Walk the built Bag, extract app config, mount widgets.
 
         Nodes tagged 'css' and 'binding' are app configuration —
-        applied to live_app, not rendered as widgets.
-        All other nodes are rendered as widgets into live_app.root.
-        """
-        css_parts: list[str] = []
+        applied to the live_app (target), not rendered as widgets.
+        All other nodes are rendered recursively into target.root.
 
-        for node in compiled_bag:
-            if node.node_tag == "css":
-                css_text = str(node.value) if node.value else ""
+        Args:
+            built_bag: The built Bag with pointer formali.
+            target: The LiveApp instance to mount widgets into.
+        """
+        if target is None:
+            return
+
+        # Phase 1: Extract CSS and bindings from entire built tree (recursive)
+        css_parts: list[str] = []
+        self._extract_config(built_bag, css_parts, target)
+
+        # Phase 2: Render widgets (css/binding skipped by _render_node)
+        for node in built_bag:
+            self._render_node(node, target.root)
+
+        # Phase 3: Apply collected CSS
+        if css_parts:
+            target.stylesheet.add_source("\n".join(css_parts))
+            target.stylesheet.reparse()
+            target.stylesheet.apply(target)
+
+    # -------------------------------------------------------------------------
+    # Config extraction (css, binding) — recursive through transparent nodes
+    # -------------------------------------------------------------------------
+
+    def _extract_config(self, bag: Bag, css_parts: list[str], target: Any) -> None:
+        """Recursively extract css and binding nodes from the built tree."""
+        for node in bag:
+            tag = node.node_tag or ""
+            if tag == "css":
+                ctx = self._build_context(node)
+                css_text = ctx["node_value"]
                 if css_text:
                     css_parts.append(css_text)
-            elif node.node_tag == "binding":
-                key = node.attr.get("key", "")
-                action = node.attr.get("action", "")
-                description = node.attr.get("description", "")
+            elif tag == "binding":
+                ctx = self._build_context(node)
+                key = ctx.get("key", "")
+                action = ctx.get("action", "")
+                description = ctx.get("description", "")
                 if key and action:
-                    live_app.bind(key, action, description=description)
-            else:
-                self._render_node(node, live_app.root)
+                    target.bind(key, action, description=description)
+            elif isinstance(node.value, Bag):
+                self._extract_config(node.value, css_parts, target)
 
-        if css_parts:
-            live_app.stylesheet.add_source("\n".join(css_parts))
-            live_app.stylesheet.reparse()
-            live_app.stylesheet.apply(live_app)
+    # -------------------------------------------------------------------------
+    # Node rendering dispatch
+    # -------------------------------------------------------------------------
 
     def _render_node(self, node: BagNode, parent_widget: Widget) -> None:
-        """Render a single node: dispatch by tag, then recurse children."""
+        """Render a single node: dispatch by tag, then recurse children.
+
+        Skips css and binding nodes — those are extracted separately
+        by compile() and applied to the LiveApp, not rendered as widgets.
+        """
         tag = node.node_tag or "static"
+
+        if tag in ("css", "binding"):
+            return
 
         render_method = getattr(self, f"_render_{tag}", None)
         if render_method:
@@ -87,21 +121,20 @@ class TextualCompiler(BagCompilerBase):
         self._render_default(node, parent_widget)
 
     def _render_default(self, node: BagNode, parent_widget: Widget) -> None:
-        """Generic rendering: import class from compile_kwargs, create, mount.
+        """Generic rendering: import class from _meta, create, mount.
 
         If the node has no compile_class (e.g. a materialized component),
         its children are rendered directly into the parent — the component
         node itself is transparent after expansion.
         """
         tag = node.node_tag or "static"
-        attr = dict(node.attr)
 
         try:
             schema_info = self.builder._get_schema_info(tag)
         except KeyError:
             schema_info = {}
-        compile_kwargs = schema_info.get("compile_kwargs", {})
-        class_name = compile_kwargs.get("class")
+        meta = schema_info.get("_meta") or {}
+        class_name = meta.get("compile_class")
 
         if class_name is None:
             # No widget class: transparent container (e.g. materialized component).
@@ -111,20 +144,29 @@ class TextualCompiler(BagCompilerBase):
                     self._render_node(child_node, parent_widget)
             return
 
-        module_name = compile_kwargs.get("module", "textual.widgets")
+        module_name = meta.get("compile_module", "textual.widgets")
         module = import_module(module_name)
         textual_class = getattr(module, class_name)
 
+        # Resolve pointer formali just-in-time
+        ctx = self._build_context(node)
+        resolved_value = ctx["node_value"]
+        resolved_attrs = {
+            k: v
+            for k, v in ctx.items()
+            if k not in ("node_value", "node_label", "_node", "children")
+        }
+
         # Separate attributes into constructor args, CSS styles, reactive attrs
-        init_kwargs, style_attrs, reactive_attrs = self._classify_attrs(attr, textual_class)
+        init_kwargs, style_attrs, reactive_attrs = self._classify_attrs(
+            resolved_attrs, textual_class
+        )
 
         if "id" not in init_kwargs:
             init_kwargs["id"] = f"{tag}_{self.widget_counter}"
 
-        if isinstance(node.value, Bag):
-            content = ""
-        else:
-            content = str(node.value) if node.value else ""
+        has_children = isinstance(node.value, Bag)
+        content = "" if has_children else (resolved_value or "")
 
         first_param = self._first_positional_param(textual_class.__init__)
         if content and first_param and first_param not in init_kwargs:
@@ -135,7 +177,7 @@ class TextualCompiler(BagCompilerBase):
         self._apply_reactive(widget, reactive_attrs)
         self._mount(node, widget, parent_widget)
 
-        if isinstance(node.value, Bag):
+        if has_children:
             for child_node in node.value:
                 self._render_node(child_node, widget)
 
@@ -147,8 +189,13 @@ class TextualCompiler(BagCompilerBase):
         """Static text widget."""
         from textual.widgets import Static
 
-        content = str(node.value) if node.value else ""
-        attr = {k: v for k, v in node.attr.items() if not k.startswith("_")}
+        ctx = self._build_context(node)
+        content = ctx["node_value"] or ""
+        attr = {
+            k: v
+            for k, v in ctx.items()
+            if k not in ("node_value", "node_label", "_node", "children") and not k.startswith("_")
+        }
 
         if "id" not in attr:
             attr["id"] = f"static_{self.widget_counter}"
@@ -160,7 +207,12 @@ class TextualCompiler(BagCompilerBase):
         """TabbedContent: children go via add_pane(), not mount()."""
         from textual.widgets import TabbedContent
 
-        attr = dict(node.attr)
+        ctx = self._build_context(node)
+        attr = {
+            k: v
+            for k, v in ctx.items()
+            if k not in ("node_value", "node_label", "_node", "children")
+        }
         initial = attr.pop("initial", "")
         kwargs = self._filter_kwargs_for_signature(attr, TabbedContent.__init__)
 
@@ -186,7 +238,12 @@ class TextualCompiler(BagCompilerBase):
         """TabPane added to TabbedContent via add_pane()."""
         from textual.widgets import TabPane
 
-        attr = dict(node.attr)
+        ctx = self._build_context(node)
+        attr = {
+            k: v
+            for k, v in ctx.items()
+            if k not in ("node_value", "node_label", "_node", "children")
+        }
         title = attr.pop("title", None) or "Untitled"
         kwargs = self._filter_kwargs_for_signature(attr, TabPane.__init__)
 
@@ -202,13 +259,15 @@ class TextualCompiler(BagCompilerBase):
                 self._render_node(child_node, widget)
 
     def _render_tree(self, node: BagNode, parent_widget: Widget) -> None:
-        """Tree widget: populate from store attribute if it's a Bag.
-
-        Subscribes to the store Bag so the tree repopulates on changes.
-        """
+        """Tree widget: populate from store attribute if it's a Bag."""
         from textual.widgets import Tree
 
-        attr = dict(node.attr)
+        ctx = self._build_context(node)
+        attr = {
+            k: v
+            for k, v in ctx.items()
+            if k not in ("node_value", "node_label", "_node", "children")
+        }
         store = attr.pop("store", None)
         label = attr.pop("label", None) or "Tree"
         kwargs = self._filter_kwargs_for_signature(attr, Tree.__init__)
@@ -239,7 +298,12 @@ class TextualCompiler(BagCompilerBase):
         """DataTable: columns and rows via add_column/add_row."""
         from textual.widgets import DataTable
 
-        attr = dict(node.attr)
+        ctx = self._build_context(node)
+        attr = {
+            k: v
+            for k, v in ctx.items()
+            if k not in ("node_value", "node_label", "_node", "children")
+        }
         kwargs = self._filter_kwargs_for_signature(attr, DataTable.__init__)
 
         if "id" not in kwargs:
@@ -251,45 +315,48 @@ class TextualCompiler(BagCompilerBase):
         if not isinstance(node.value, Bag):
             return
 
-        columns = []
-        rows = []
         for child_node in node.value:
             if child_node.node_tag == "column":
-                columns.append(child_node)
+                col_ctx = self._build_context(child_node)
+                col_attr = {
+                    k: v
+                    for k, v in col_ctx.items()
+                    if k not in ("node_value", "node_label", "_node", "children")
+                }
+                label = col_attr.get("label", col_ctx["node_value"] or "")
+                col_kwargs = self._filter_kwargs_for_signature(col_attr, widget.add_column)
+                widget.add_column(label, **col_kwargs)
             elif child_node.node_tag == "row":
-                rows.append(child_node)
-
-        for col_node in columns:
-            col_attr = dict(col_node.attr)
-            label = col_attr.get("label", str(col_node.value) if col_node.value else "")
-            col_kwargs = self._filter_kwargs_for_signature(col_attr, widget.add_column)
-            widget.add_column(label, **col_kwargs)
-
-        for row_node in rows:
-            row_attr = dict(row_node.attr)
-            if isinstance(row_node.value, (list, tuple)):
-                cells = row_node.value
-            elif isinstance(row_node.value, Bag):
-                cells = [str(c.value) for c in row_node.value]
-            else:
-                cells = [str(row_node.value)] if row_node.value else []
-            row_kwargs = self._filter_kwargs_for_signature(row_attr, widget.add_row)
-            widget.add_row(*cells, **row_kwargs)
+                row_ctx = self._build_context(child_node)
+                row_attr = {
+                    k: v
+                    for k, v in row_ctx.items()
+                    if k not in ("node_value", "node_label", "_node", "children")
+                }
+                raw_value = child_node.value
+                if isinstance(raw_value, (list, tuple)):
+                    cells = raw_value
+                elif isinstance(raw_value, Bag):
+                    cells = [str(c.value) for c in raw_value]
+                else:
+                    cells = [str(raw_value)] if raw_value else []
+                row_kwargs = self._filter_kwargs_for_signature(row_attr, widget.add_row)
+                widget.add_row(*cells, **row_kwargs)
 
     # -------------------------------------------------------------------------
-    # Mount helper
+    # Mount and link
     # -------------------------------------------------------------------------
 
     def _mount(self, node: BagNode, widget: Widget, parent_widget: Widget) -> None:
-        """Mount widget to parent, store bidirectional references, bind store."""
+        """Mount widget to parent, store bidirectional node <-> widget link."""
         node.compiled["widget"] = widget
         widget._bag_node = node  # type: ignore[attr-defined]
 
-        # If the node has a store attribute (a Bag), proxy it on the widget
-        # and subscribe for reactive updates
+        # If the node has a store attribute (a Bag), subscribe for reactive updates
         store = node.attr.get("store")
         if isinstance(store, Bag):
             from genro_textual.debug import log
+
             widget._store = store  # type: ignore[attr-defined]
             subscriber_id = f"store_{widget.id or id(widget)}"
             store.subscribe(subscriber_id, any=lambda **kw: self._on_store_changed(widget, store))
@@ -333,11 +400,7 @@ class TextualCompiler(BagCompilerBase):
     def _classify_attrs(
         self, attr: dict[str, Any], textual_class: type
     ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-        """Classify node attributes into constructor args, CSS styles, reactive attrs.
-
-        Returns:
-            (init_kwargs, style_attrs, reactive_attrs)
-        """
+        """Classify node attributes into constructor args, CSS styles, reactive attrs."""
         init_kwargs: dict[str, Any] = {}
         style_attrs: dict[str, Any] = {}
         reactive_attrs: dict[str, Any] = {}
@@ -354,7 +417,6 @@ class TextualCompiler(BagCompilerBase):
             elif isinstance(getattr(textual_class, key, None), Reactive):
                 reactive_attrs[key] = value
             else:
-                # Fallback: try as init kwarg if **kwargs accepted
                 if self._has_var_keyword(textual_class):
                     init_kwargs[key] = value
 
@@ -380,17 +442,13 @@ class TextualCompiler(BagCompilerBase):
     def _has_var_keyword(self, textual_class: type) -> bool:
         """Check if __init__ accepts **kwargs."""
         sig = inspect.signature(textual_class.__init__)
-        return any(
-            p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
-        )
+        return any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values())
 
     # -------------------------------------------------------------------------
     # Signature introspection
     # -------------------------------------------------------------------------
 
-    def _filter_kwargs_for_signature(
-        self, attr: dict[str, Any], method: Any
-    ) -> dict[str, Any]:
+    def _filter_kwargs_for_signature(self, attr: dict[str, Any], method: Any) -> dict[str, Any]:
         """Filter attr dict to only keys accepted by method signature."""
         sig = inspect.signature(method)
         valid_params = set(sig.parameters.keys()) - {"self"}

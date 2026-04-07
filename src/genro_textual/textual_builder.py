@@ -11,6 +11,7 @@ a mixin that can be included or excluded when composing a builder.
 
 No rendering logic here — that belongs in TextualCompiler.
 """
+
 from __future__ import annotations
 
 from genro_builders.builder import BagBuilderBase, component, element
@@ -29,72 +30,102 @@ class TextualWidgetsMixin:
     # Container elements (from textual.containers)
     # -------------------------------------------------------------------------
 
-    @element(sub_tags="*", compile_module="textual.containers", compile_class="Container")
+    @element(
+        sub_tags="*", _meta={"compile_module": "textual.containers", "compile_class": "Container"}
+    )
     def container(self):
         """A generic container widget."""
         ...
 
-    @element(sub_tags="*", compile_module="textual.containers", compile_class="Vertical")
+    @element(
+        sub_tags="*", _meta={"compile_module": "textual.containers", "compile_class": "Vertical"}
+    )
     def vertical(self):
         """A container that arranges children vertically."""
         ...
 
-    @element(sub_tags="*", compile_module="textual.containers", compile_class="Horizontal")
+    @element(
+        sub_tags="*", _meta={"compile_module": "textual.containers", "compile_class": "Horizontal"}
+    )
     def horizontal(self):
         """A container that arranges children horizontally."""
         ...
 
-    @element(sub_tags="*", compile_module="textual.containers", compile_class="Center")
+    @element(
+        sub_tags="*", _meta={"compile_module": "textual.containers", "compile_class": "Center"}
+    )
     def center(self):
         """A container that centers its children horizontally."""
         ...
 
-    @element(sub_tags="*", compile_module="textual.containers", compile_class="Middle")
+    @element(
+        sub_tags="*", _meta={"compile_module": "textual.containers", "compile_class": "Middle"}
+    )
     def middle(self):
         """A container that centers its children vertically."""
         ...
 
-    @element(sub_tags="*", compile_module="textual.containers", compile_class="CenterMiddle")
+    @element(
+        sub_tags="*",
+        _meta={"compile_module": "textual.containers", "compile_class": "CenterMiddle"},
+    )
     def centermiddle(self):
         """A container that centers its children both horizontally and vertically."""
         ...
 
-    @element(sub_tags="*", compile_module="textual.containers", compile_class="Right")
+    @element(sub_tags="*", _meta={"compile_module": "textual.containers", "compile_class": "Right"})
     def right(self):
         """A container that aligns its children to the right."""
         ...
 
-    @element(sub_tags="*", compile_module="textual.containers", compile_class="Grid")
+    @element(sub_tags="*", _meta={"compile_module": "textual.containers", "compile_class": "Grid"})
     def grid(self):
         """A container with grid layout."""
         ...
 
-    @element(sub_tags="*", compile_module="textual.containers", compile_class="VerticalScroll")
+    @element(
+        sub_tags="*",
+        _meta={"compile_module": "textual.containers", "compile_class": "VerticalScroll"},
+    )
     def verticalscroll(self):
         """A scrollable vertical container."""
         ...
 
-    @element(sub_tags="*", compile_module="textual.containers", compile_class="HorizontalScroll")
+    @element(
+        sub_tags="*",
+        _meta={"compile_module": "textual.containers", "compile_class": "HorizontalScroll"},
+    )
     def horizontalscroll(self):
         """A scrollable horizontal container."""
         ...
 
-    @element(sub_tags="*", compile_module="textual.containers", compile_class="ScrollableContainer")
+    @element(
+        sub_tags="*",
+        _meta={"compile_module": "textual.containers", "compile_class": "ScrollableContainer"},
+    )
     def scrollablecontainer(self):
         """A scrollable container."""
         ...
 
-    @element(sub_tags="*", compile_module="textual.containers", compile_class="VerticalGroup")
+    @element(
+        sub_tags="*",
+        _meta={"compile_module": "textual.containers", "compile_class": "VerticalGroup"},
+    )
     def verticalgroup(self):
         """A vertical group of widgets."""
         ...
 
-    @element(sub_tags="*", compile_module="textual.containers", compile_class="HorizontalGroup")
+    @element(
+        sub_tags="*",
+        _meta={"compile_module": "textual.containers", "compile_class": "HorizontalGroup"},
+    )
     def horizontalgroup(self):
         """A horizontal group of widgets."""
         ...
 
-    @element(sub_tags="*", compile_module="textual.containers", compile_class="ItemGrid")
+    @element(
+        sub_tags="*", _meta={"compile_module": "textual.containers", "compile_class": "ItemGrid"}
+    )
     def itemgrid(self, min_column_width: int = 20):
         """A grid container that arranges items in columns."""
         ...
@@ -103,7 +134,7 @@ class TextualWidgetsMixin:
     # Widget elements (from textual.widgets)
     # -------------------------------------------------------------------------
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="Button")
+    @element(sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "Button"})
     def button(
         self,
         content: str = "",
@@ -115,7 +146,7 @@ class TextualWidgetsMixin:
         """A simple clickable button."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="Checkbox")
+    @element(sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "Checkbox"})
     def checkbox(
         self,
         content: str = "",
@@ -128,7 +159,9 @@ class TextualWidgetsMixin:
         """A check box widget that represents a boolean value."""
         ...
 
-    @element(sub_tags="*", compile_module="textual.widgets", compile_class="Collapsible")
+    @element(
+        sub_tags="*", _meta={"compile_module": "textual.widgets", "compile_class": "Collapsible"}
+    )
     def collapsible(
         self,
         title: str = "Toggle",
@@ -139,7 +172,10 @@ class TextualWidgetsMixin:
         """A collapsible container."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="CollapsibleTitle")
+    @element(
+        sub_tags="",
+        _meta={"compile_module": "textual.widgets", "compile_class": "CollapsibleTitle"},
+    )
     def collapsibletitle(
         self,
         content: str = "",
@@ -151,12 +187,18 @@ class TextualWidgetsMixin:
         """Title and symbol for the Collapsible."""
         ...
 
-    @element(sub_tags="*", compile_module="textual.widgets", compile_class="ContentSwitcher")
+    @element(
+        sub_tags="*",
+        _meta={"compile_module": "textual.widgets", "compile_class": "ContentSwitcher"},
+    )
     def contentswitcher(self, initial: str | None = None):
         """A widget for switching between different children."""
         ...
 
-    @element(sub_tags="column,row", compile_module="textual.widgets", compile_class="DataTable")
+    @element(
+        sub_tags="column,row",
+        _meta={"compile_module": "textual.widgets", "compile_class": "DataTable"},
+    )
     def datatable(
         self,
         show_header: bool = True,
@@ -184,22 +226,24 @@ class TextualWidgetsMixin:
         """A row for DataTable. Value can be a list of cell values."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="Digits")
+    @element(sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "Digits"})
     def digits(self, content: str = "", value: str = ""):
         """A widget to display numerical values using a 3x3 grid of unicode characters."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="DirectoryTree")
+    @element(
+        sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "DirectoryTree"}
+    )
     def directorytree(self, content: str = "", path: str | None = None):
         """A Tree widget that presents files and directories."""
         ...
 
-    @element(sub_tags="*", compile_module="textual.widgets", compile_class="Footer")
+    @element(sub_tags="*", _meta={"compile_module": "textual.widgets", "compile_class": "Footer"})
     def footer(self, show_command_palette: bool = True, compact: bool = False):
         """Textual Footer widget."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="Header")
+    @element(sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "Header"})
     def header(
         self,
         content: str = "",
@@ -210,12 +254,14 @@ class TextualWidgetsMixin:
         """A header widget with icon and clock."""
         ...
 
-    @element(sub_tags="*", compile_module="textual.widgets", compile_class="HelpPanel")
+    @element(
+        sub_tags="*", _meta={"compile_module": "textual.widgets", "compile_class": "HelpPanel"}
+    )
     def helppanel(self, markup: bool = True):
         """Textual HelpPanel widget."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="Input")
+    @element(sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "Input"})
     def input(
         self,
         content: str = "",
@@ -233,7 +279,7 @@ class TextualWidgetsMixin:
         """A text input widget."""
         ...
 
-    @element(sub_tags="*", compile_module="textual.widgets", compile_class="KeyPanel")
+    @element(sub_tags="*", _meta={"compile_module": "textual.widgets", "compile_class": "KeyPanel"})
     def keypanel(
         self,
         can_focus: str | None = None,
@@ -243,7 +289,7 @@ class TextualWidgetsMixin:
         """Textual KeyPanel widget."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="Label")
+    @element(sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "Label"})
     def label(
         self,
         content: str = "",
@@ -255,7 +301,7 @@ class TextualWidgetsMixin:
         """A simple label widget for displaying text-oriented renderables."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="Link")
+    @element(sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "Link"})
     def link(
         self,
         content: str = "",
@@ -266,22 +312,28 @@ class TextualWidgetsMixin:
         """A simple, clickable link that opens a URL."""
         ...
 
-    @element(sub_tags="*", compile_module="textual.widgets", compile_class="ListItem")
+    @element(sub_tags="*", _meta={"compile_module": "textual.widgets", "compile_class": "ListItem"})
     def listitem(self, markup: bool = True):
         """A widget that is an item within a `ListView`."""
         ...
 
-    @element(sub_tags="listitem", compile_module="textual.widgets", compile_class="ListView")
+    @element(
+        sub_tags="listitem",
+        _meta={"compile_module": "textual.widgets", "compile_class": "ListView"},
+    )
     def listview(self, initial_index: int = 0):
         """A vertical list view widget."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="LoadingIndicator")
+    @element(
+        sub_tags="",
+        _meta={"compile_module": "textual.widgets", "compile_class": "LoadingIndicator"},
+    )
     def loadingindicator(self, content: str = ""):
         """Display an animated loading indicator."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="Log")
+    @element(sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "Log"})
     def log(
         self,
         content: str = "",
@@ -292,7 +344,7 @@ class TextualWidgetsMixin:
         """A widget to log text."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="Markdown")
+    @element(sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "Markdown"})
     def markdown(
         self,
         content: str = "",
@@ -303,7 +355,9 @@ class TextualWidgetsMixin:
         """Textual Markdown widget."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="MarkdownViewer")
+    @element(
+        sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "MarkdownViewer"}
+    )
     def markdownviewer(
         self,
         content: str = "",
@@ -315,7 +369,9 @@ class TextualWidgetsMixin:
         """A Markdown viewer widget."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="MaskedInput")
+    @element(
+        sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "MaskedInput"}
+    )
     def maskedinput(
         self,
         content: str = "",
@@ -330,22 +386,28 @@ class TextualWidgetsMixin:
         """A masked text input widget."""
         ...
 
-    @element(sub_tags="*", compile_module="textual.widgets", compile_class="OptionList")
+    @element(
+        sub_tags="*", _meta={"compile_module": "textual.widgets", "compile_class": "OptionList"}
+    )
     def optionlist(self, markup: bool = True, compact: bool = False):
         """A navigable list of options."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="Placeholder")
+    @element(
+        sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "Placeholder"}
+    )
     def placeholder(self, content: str = "", label: str | None = None, variant: str = "default"):
         """A simple placeholder widget to use before you build your custom widgets."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="Pretty")
+    @element(sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "Pretty"})
     def pretty(self, content: str = "", object: str | None = None):
         """A pretty-printing widget."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="ProgressBar")
+    @element(
+        sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "ProgressBar"}
+    )
     def progressbar(
         self,
         content: str = "",
@@ -357,7 +419,9 @@ class TextualWidgetsMixin:
         """A progress bar widget."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="RadioButton")
+    @element(
+        sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "RadioButton"}
+    )
     def radiobutton(
         self,
         content: str = "",
@@ -370,12 +434,15 @@ class TextualWidgetsMixin:
         """A radio button widget that represents a boolean value."""
         ...
 
-    @element(sub_tags="radiobutton", compile_module="textual.widgets", compile_class="RadioSet")
+    @element(
+        sub_tags="radiobutton",
+        _meta={"compile_module": "textual.widgets", "compile_class": "RadioSet"},
+    )
     def radioset(self, tooltip: str | None = None, compact: bool = False):
         """Widget for grouping a collection of radio buttons into a set."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="RichLog")
+    @element(sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "RichLog"})
     def richlog(
         self,
         content: str = "",
@@ -389,12 +456,12 @@ class TextualWidgetsMixin:
         """A widget for logging Rich renderables and text."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="Rule")
+    @element(sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "Rule"})
     def rule(self, content: str = "", orientation: str = "horizontal", line_style: str = "solid"):
         """A rule widget to separate content, similar to a `<hr>` HTML tag."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="Select")
+    @element(sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "Select"})
     def select(
         self,
         content: str = "",
@@ -409,12 +476,14 @@ class TextualWidgetsMixin:
         """Widget to select from a list of possible options."""
         ...
 
-    @element(sub_tags="*", compile_module="textual.widgets", compile_class="SelectionList")
+    @element(
+        sub_tags="*", _meta={"compile_module": "textual.widgets", "compile_class": "SelectionList"}
+    )
     def selectionlist(self, compact: bool = False):
         """A vertical selection list that allows making multiple selections."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="Sparkline")
+    @element(sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "Sparkline"})
     def sparkline(
         self,
         content: str = "",
@@ -426,14 +495,14 @@ class TextualWidgetsMixin:
         """A sparkline widget to display numerical data."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="Static")
+    @element(sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "Static"})
     def static(
         self, content: str = "", expand: bool = False, shrink: bool = False, markup: bool = True
     ):
         """A widget to display simple static content."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="Switch")
+    @element(sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "Switch"})
     def switch(
         self,
         content: str = "",
@@ -444,7 +513,7 @@ class TextualWidgetsMixin:
         """A switch widget that represents a boolean value."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="Tab")
+    @element(sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "Tab"})
     def tab(self, content: str = "", label: str | None = None):
         """A Widget to manage a single tab within a Tabs widget."""
         ...
@@ -452,24 +521,26 @@ class TextualWidgetsMixin:
     @element(
         sub_tags="*",
         parent_tags="tabbedcontent",
-        compile_module="textual.widgets",
-        compile_class="TabPane",
+        _meta={"compile_module": "textual.widgets", "compile_class": "TabPane"},
     )
     def tabpane(self, title: str | None = None):
         """A container for switchable content, with additional title."""
         ...
 
-    @element(sub_tags="tabpane", compile_module="textual.widgets", compile_class="TabbedContent")
+    @element(
+        sub_tags="tabpane",
+        _meta={"compile_module": "textual.widgets", "compile_class": "TabbedContent"},
+    )
     def tabbedcontent(self, initial: str = ""):
         """A container with associated tabs to toggle content visibility."""
         ...
 
-    @element(sub_tags="tab", compile_module="textual.widgets", compile_class="Tabs")
+    @element(sub_tags="tab", _meta={"compile_module": "textual.widgets", "compile_class": "Tabs"})
     def tabs(self, active: str | None = None):
         """A row of tabs."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="TextArea")
+    @element(sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "TextArea"})
     def textarea(
         self,
         content: str = "",
@@ -491,17 +562,20 @@ class TextualWidgetsMixin:
         """Textual TextArea widget."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="Tooltip")
+    @element(sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "Tooltip"})
     def tooltip(
         self, content: str = "", expand: bool = False, shrink: bool = False, markup: bool = True
     ):
         """Textual Tooltip widget."""
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="Tree")
+    @element(sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "Tree"})
     def tree(
-        self, content: str = "", label: str | None = None,
-        data: str | None = None, store: object | None = None,
+        self,
+        content: str = "",
+        label: str | None = None,
+        data: str | None = None,
+        store: object | None = None,
     ):
         """A widget for displaying and navigating data in a tree.
 
@@ -510,7 +584,7 @@ class TextualWidgetsMixin:
         """
         ...
 
-    @element(sub_tags="", compile_module="textual.widgets", compile_class="Welcome")
+    @element(sub_tags="", _meta={"compile_module": "textual.widgets", "compile_class": "Welcome"})
     def welcome(
         self, content: str = "", expand: bool = False, shrink: bool = False, markup: bool = True
     ):
@@ -546,7 +620,6 @@ class TextualWidgetsMixin:
         """A form container. Open: returns internal bag for adding fields."""
         if title:
             comp.static(title)
-
 
 
 class TextualBuilder(FoundationMixin, TextualWidgetsMixin, BagBuilderBase):

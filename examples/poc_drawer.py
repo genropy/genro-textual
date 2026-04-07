@@ -13,8 +13,8 @@ from genro_textual import TextualApp
 class Application(TextualApp):
     """App using the built-in shell with inspector."""
 
-    def recipe(self, page):
-        shell = page.app_shell(
+    def main(self, source):
+        shell = source.app_shell(
             title="My Application",
             data_store=self.data,
             source_store=self.source,
@@ -28,12 +28,11 @@ class Application(TextualApp):
         for i in range(1, 10):
             shell.content.static(f"  Content line {i}")
 
-    def setup(self):
+    def store(self, data):
         self._init_shell_data()
-        self.data["greeting"] = "Hello!"
-        self.data["form.name"] = "John"
-        self.data["form.surname"] = "Doe"
-        super().setup()
+        data["greeting"] = "Hello!"
+        data["form.name"] = "John"
+        data["form.surname"] = "Doe"
 
 
 if __name__ == "__main__":

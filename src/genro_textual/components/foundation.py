@@ -4,10 +4,10 @@
 Provides the standard application layout: header, scrollable content area,
 resizable inspector drawer with Data/Source/Compiled tree tabs, and footer.
 
-Usage in recipe::
+Usage in main::
 
-    def recipe(self, page):
-        shell = page.app_shell(
+    def main(self, source):
+        shell = source.app_shell(
             title="My App",
             data_store=self.data,
             source_store=self.source,

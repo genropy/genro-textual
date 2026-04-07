@@ -13,7 +13,7 @@ from genro_textual import TextualApp
 class Application(TextualApp):
     """TextualApp controllable via remote connection."""
 
-    def recipe(self, page):
-        page.static("Remote TextualApp")
-        page.static("Use remote REPL to add widgets")
-        page.static("Press 'q' to quit")
+    def main(self, source):
+        source.static("Remote TextualApp")
+        source.static("Use remote REPL to add widgets")
+        source.static("Press 'q' to quit")

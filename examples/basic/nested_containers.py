@@ -11,9 +11,9 @@ from genro_textual import TextualApp
 class Application(TextualApp):
     """App with nested containers."""
 
-    def recipe(self, page):
-        page.static("Main Title")
+    def main(self, source):
+        source.static("Main Title")
 
-        box = page.container()
+        box = source.container()
         box.static("Inside container")
         box.button("Click me", variant="primary")

@@ -4,25 +4,25 @@ Genro Textual supports Textual's CSS for styling, both as inline stylesheets and
 
 ## Inline CSS
 
-Use `page.css()` in the recipe for stylesheets:
+Use `source.css()` in the main method for stylesheets:
 
 ```python
-page.css("""
+source.css("""
     #sidebar { width: 30; background: $surface; border-left: solid $primary; }
     .title { color: green; text-style: bold; margin: 1 0; }
     .muted { color: $text-muted; }
 """)
 ```
 
-CSS variables (`$surface`, `$primary`, `$text`, `$error`, etc.) are Textual theme variables — they work only in `page.css()`, not in direct attribute assignment.
+CSS variables (`$surface`, `$primary`, `$text`, `$error`, etc.) are Textual theme variables — they work only in `source.css()`, not in direct attribute assignment.
 
 ## Direct Style Attributes
 
 Set CSS properties directly on widgets:
 
 ```python
-page.vertical(id="panel", width=40, display="block")
-page.static("Bold text", color="green", background="red")
+source.vertical(id="panel", width=40, display="block")
+source.static("Bold text", color="green", background="red")
 ```
 
 At mount time, the compiler classifies each attribute:
@@ -35,12 +35,12 @@ At mount time, the compiler classifies each attribute:
 Direct style attributes support `^pointer` binding:
 
 ```python
-page.vertical(width="^_system.panel.width")
+source.vertical(width="^_system.panel.width")
 ```
 
 When `data["_system.panel.width"]` changes, the width updates.
 
-Note: CSS variables (`$surface`) cannot be used in direct attributes — only in `page.css()`.
+Note: CSS variables (`$surface`) cannot be used in direct attributes — only in `source.css()`.
 
 ## Supported CSS Properties
 
@@ -60,7 +60,7 @@ All Textual CSS properties are supported as direct attributes:
 ## Classes and IDs
 
 ```python
-page.static("Text", id="my-label", classes="title highlight")
+source.static("Text", id="my-label", classes="title highlight")
 ```
 
 IDs and classes are used for CSS selector targeting.

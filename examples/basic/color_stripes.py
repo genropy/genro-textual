@@ -15,8 +15,8 @@ class Application(TextualApp):
 
     COLORS = ["red", "orange", "yellow", "green", "blue", "purple"]
 
-    def recipe(self, page):
-        page.css("""
+    def main(self, source):
+        source.css("""
             Static {
                 text-align: center;
                 text-style: bold;
@@ -30,4 +30,4 @@ class Application(TextualApp):
             .stripe-5 { background: purple; }
         """)
         for i, color in enumerate(self.COLORS):
-            page.static(f"  {color.upper()}  ", classes=f"stripe-{i}")
+            source.static(f"  {color.upper()}  ", classes=f"stripe-{i}")

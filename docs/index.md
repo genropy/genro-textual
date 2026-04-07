@@ -6,21 +6,20 @@ A **declarative TUI framework** that builds terminal interfaces from [Bag](https
 
 ## The Idea
 
-Instead of writing imperative widget code, you describe your UI in a **recipe** — a series of builder calls that create a Bag structure. The framework compiles this structure and renders it as a Textual application.
+Instead of writing imperative widget code, you describe your UI in a **main method** — a series of builder calls that create a Bag structure. The framework builds this structure and renders it as a Textual application.
 
 ```python
 from genro_textual import TextualApp
 
 class MyApp(TextualApp):
-    def recipe(self, page):
-        page.binding(key="q", action="quit", description="Quit")
-        page.static("^greeting")
-        page.input(value="^form.name", placeholder="Your name")
+    def main(self, source):
+        source.binding(key="q", action="quit", description="Quit")
+        source.static("^greeting")
+        source.input(value="^form.name", placeholder="Your name")
 
-    def setup(self):
-        self.data["greeting"] = "Hello, World!"
-        self.data["form.name"] = ""
-        super().setup()
+    def store(self, data):
+        data["greeting"] = "Hello, World!"
+        data["form.name"] = ""
 
 if __name__ == "__main__":
     MyApp().run()
@@ -28,23 +27,23 @@ if __name__ == "__main__":
 
 ## Key Concepts
 
-- **Recipe** — Declare your UI structure with builder calls
-- **Bag-driven** — All state lives in Bag structures (data, source, compiled)
+- **main()** — Declare your UI structure with builder calls
+- **Bag-driven** — All state lives in Bag structures (data, source, built)
 - **Reactive binding** — `^pointer` syntax binds widgets to data paths
 - **Bidirectional** — Input widgets write back to data on blur
-- **CSS in recipe** — Inline stylesheets via `page.css()`
+- **CSS in main** — Inline stylesheets via `source.css()`
 - **Puppeteer/Puppet** — TextualApp (logic) drives LiveApp (rendering)
 
 ## Architecture
 
 ```mermaid
 graph LR
-    R[Recipe] --> S[Source Bag]
-    S --> C[Compiler]
-    C --> CB[Compiled Bag]
-    CB --> RE[Renderer]
+    R[main] --> S[Source Bag]
+    S --> B[Build]
+    B --> BB[Built Bag]
+    BB --> RE[Renderer]
     RE --> W[Widget Tree]
-    D[Data Bag] -.->|binding| CB
+    D[Data Bag] -.->|binding| BB
     W -.->|blur/change| D
 ```
 
@@ -65,7 +64,7 @@ getting-started
 :caption: Guide
 :hidden:
 
-guide/recipe
+guide/building-ui
 guide/data-binding
 guide/css-and-styles
 guide/widgets

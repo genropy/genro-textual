@@ -7,8 +7,8 @@ Genro Textual uses `^pointer` syntax to bind widgets to paths in the data Bag. W
 Use `^path` in any value or attribute:
 
 ```python
-page.static("^user.name")              # value bound to data["user.name"]
-page.input(value="^form.email")        # attr bound to data["form.email"]
+source.static("^user.name")              # value bound to data["user.name"]
+source.input(value="^form.email")        # attr bound to data["form.email"]
 ```
 
 When `data["user.name"]` changes, the Static updates automatically.
@@ -21,8 +21,8 @@ Input widgets write back to data:
 - **Checkbox/Switch**: writes on **change** (immediate)
 
 ```python
-page.input(value="^form.name")    # writes data["form.name"] on blur
-page.checkbox(value="^settings.dark_mode")  # writes immediately
+source.input(value="^form.name")    # writes data["form.name"] on blur
+source.checkbox(value="^settings.dark_mode")  # writes immediately
 ```
 
 ## Anti-Loop
@@ -47,25 +47,26 @@ The binding uses a flat subscription map:
 ```
 
 - Key: data path
-- Value: list of compiled node paths (with optional `?attr` suffix)
+- Value: list of built node paths (with optional `?attr` suffix)
 
 ## CSS Property Binding
 
 CSS properties can be bound to data paths:
 
 ```python
-page.vertical(id="panel", width="^_system.panel.width")
+source.vertical(id="panel", width="^_system.panel.width")
 ```
 
 When `data["_system.panel.width"]` changes, `widget.styles.width` updates.
 
 ## Setup Order
 
-Data must be initialized **before** `super().setup()`:
+Data must be initialized in the `store()` method:
 
 ```python
-def setup(self):
-    self.data["form.name"] = "John"     # set initial values
-    self.data["form.email"] = ""
-    super().setup()                      # recipe + compile + bind + render
+def store(self, data):
+    data["form.name"] = "John"     # set initial values
+    data["form.email"] = ""
 ```
+
+The lifecycle is: `store(data)` → `main(source)` → `build()` → `subscribe()` → `render`.

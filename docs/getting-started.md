@@ -14,10 +14,10 @@ Create a file `hello.py`:
 from genro_textual import TextualApp
 
 class Application(TextualApp):
-    def recipe(self, page):
-        page.binding(key="q", action="quit", description="Quit")
-        page.static("Hello, Textual!")
-        page.static("Press 'q' to quit")
+    def main(self, source):
+        source.binding(key="q", action="quit", description="Quit")
+        source.static("Hello, Textual!")
+        source.static("Press 'q' to quit")
 
 if __name__ == "__main__":
     Application().run()
@@ -35,14 +35,13 @@ The `^pointer` syntax binds a widget to a path in the data Bag:
 
 ```python
 class Application(TextualApp):
-    def recipe(self, page):
-        page.binding(key="q", action="quit", description="Quit")
-        page.input(value="^form.name", placeholder="Your name")
-        page.static("^form.name")
+    def main(self, source):
+        source.binding(key="q", action="quit", description="Quit")
+        source.input(value="^form.name", placeholder="Your name")
+        source.static("^form.name")
 
-    def setup(self):
-        self.data["form.name"] = "World"
-        super().setup()
+    def store(self, data):
+        data["form.name"] = "World"
 ```
 
 - The Input shows "World" initially
@@ -51,18 +50,18 @@ class Application(TextualApp):
 
 ## Adding CSS
 
-Style your app with inline CSS in the recipe:
+Style your app with inline CSS in the main method:
 
 ```python
-def recipe(self, page):
-    page.css("""
+def main(self, source):
+    source.css("""
         .greeting { color: green; text-style: bold; }
         .info { color: $text-muted; }
     """)
-    page.binding(key="q", action="quit", description="Quit")
-    page.static("^greeting", classes="greeting")
-    page.static("Type below:", classes="info")
-    page.input(value="^form.name", placeholder="Name")
+    source.binding(key="q", action="quit", description="Quit")
+    source.static("^greeting", classes="greeting")
+    source.static("Type below:", classes="info")
+    source.input(value="^form.name", placeholder="Name")
 ```
 
 ## Using the CLI
@@ -91,6 +90,6 @@ pygui stop hello
 
 ## Next Steps
 
-- [Recipe Guide](guide/recipe.md) — Builder calls, containers, layout
+- [Building the UI](guide/building-ui.md) — Builder calls, containers, layout
 - [Data Binding](guide/data-binding.md) — Pointers, bidirectional binding, anti-loop
 - [Widgets Reference](reference/widgets.md) — All 61+ supported widgets

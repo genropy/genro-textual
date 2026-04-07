@@ -9,6 +9,6 @@ from genro_textual import TextualApp
 class Application(TextualApp):
     """Minimal app with just a header and button."""
 
-    def recipe(self, root):
-        c = root.container()
+    def main(self, source):
+        c = source.container()
         c.static("Hello World")

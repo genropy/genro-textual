@@ -11,8 +11,8 @@ from genro_textual import TextualApp
 class Application(TextualApp):
     """All examples in tabs."""
 
-    def recipe(self, page):
-        page.css("""
+    def main(self, source):
+        source.css("""
             .stripe-red { background: red; }
             .stripe-orange { background: orange; }
             .stripe-yellow { background: yellow; color: black; }
@@ -21,7 +21,7 @@ class Application(TextualApp):
             .stripe-purple { background: purple; }
         """)
 
-        tabs = page.tabbedcontent(id="examples")
+        tabs = source.tabbedcontent(id="examples")
 
         # Tab 1: Hello World
         tab1 = tabs.tabpane(title="Hello World", id="tab-hello")

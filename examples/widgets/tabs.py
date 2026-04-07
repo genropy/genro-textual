@@ -13,8 +13,8 @@ from genro_textual import TextualApp
 class Application(TextualApp):
     """TabbedContent with multiple TabPane containers."""
 
-    def recipe(self, page):
-        page.css("""
+    def main(self, source):
+        source.css("""
             .tab-title {
                 text-style: bold;
                 color: $primary;
@@ -22,7 +22,7 @@ class Application(TextualApp):
             }
         """)
 
-        tabs = page.tabbedcontent(id="main-tabs", initial="overview")
+        tabs = source.tabbedcontent(id="main-tabs", initial="overview")
 
         # Tab 1: Overview
         overview = tabs.tabpane(title="Overview", id="overview")
@@ -46,4 +46,4 @@ class Application(TextualApp):
         settings.switch(value=False, id="sw-debug")
         settings.static("Debug mode")
 
-        page.footer()
+        source.footer()

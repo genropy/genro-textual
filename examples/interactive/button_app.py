@@ -19,10 +19,10 @@ class Application(TextualApp):
         super().__init__()
         self._counter = 0
 
-    def recipe(self, page):
-        page.static("Press the button to add widgets")
-        page.static("Press 'q' to quit")
-        page.button("Add Static", id="add_btn", variant="primary")
+    def main(self, source):
+        source.static("Press the button to add widgets")
+        source.static("Press 'q' to quit")
+        source.button("Add Static", id="add_btn", variant="primary")
 
     def on_button_pressed(self, event: Button.Pressed):
         if event.button.id == "add_btn":

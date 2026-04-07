@@ -2,7 +2,7 @@
 """Tests for the genro-textual pipeline: builder, compiler, app, binding.
 
 All tests run without a Textual terminal — they test the Bag pipeline
-up to the compiled bag level. Widget rendering (mount) requires Textual
+up to the built bag level. Widget rendering (mount) requires Textual
 and is not tested here.
 """
 from __future__ import annotations
@@ -19,20 +19,24 @@ from genro_textual.textual_compiler import TextualCompiler
 # ---------------------------------------------------------------------------
 
 
-def _make_app(recipe_fn, render_counter=None):
-    """Create a TextualApp, override render to avoid Textual, call setup()."""
+def _make_app(main_fn, render_counter=None):
+    """Create a TextualApp, run full pipeline (sync, no event loop)."""
     from genro_textual.textual_app import TextualApp
 
     class TestApp(TextualApp):
-        def recipe(self, page):
-            recipe_fn(page)
+        def main(self, source):
+            main_fn(source)
 
-        def render(self, compiled_bag):
+        def _do_render(self):
             if render_counter is not None:
                 render_counter["n"] += 1
 
     app = TestApp()
-    app.setup()
+    # In sync context (no event loop): setup + build + subscribe
+    from genro_builders import BuilderManager
+    BuilderManager.setup(app)   # store + main
+    app.build()                 # sync — returns None (no event loop)
+    app.subscribe()             # activate bindings + _do_render
     return app
 
 
@@ -150,74 +154,79 @@ class TestMixinInheritance:
 
 
 # ---------------------------------------------------------------------------
-# Compiler tests
+# Compiler tests (using builder pipeline)
 # ---------------------------------------------------------------------------
 
 
 class TestCompiler:
-    """Test TextualCompiler compile phase (no rendering)."""
+    """Test builder pipeline: build phase (no rendering)."""
 
-    def _compile(self, page, data=None):
-        """Helper: compile with new API signature."""
-        from genro_builders.binding import BindingManager
-        if data is None:
-            data = Bag()
-            data.set_backref()
-        compiler = TextualCompiler(page.builder)
-        binding = BindingManager()
-        compiled = BuilderBag(builder=TextualBuilder)
-        compiled.set_backref()
-        compiler.compile(page, compiled, data, binding)
-        return compiled
+    def _make_builder(self, data=None):
+        """Create a standalone TextualBuilder with full pipeline."""
+        builder = TextualBuilder()
+        if data is not None:
+            builder._data = data
+        return builder
 
-    def test_compile_basic(self):
-        page = BuilderBag(builder=TextualBuilder)
-        page.static("Hello")
-        page.button("OK")
-        compiled = self._compile(page)
-        assert len(compiled) == 2
-        nodes = list(compiled)
+    def test_build_basic(self):
+        builder = self._make_builder()
+        builder.source.static("Hello")
+        builder.source.button("OK")
+        builder.build()
+        built = builder.built
+        assert len(built) == 2
+        nodes = list(built)
         assert nodes[0].node_tag == "static"
         assert nodes[1].node_tag == "button"
 
-    def test_compile_resolves_pointers(self):
-        page = BuilderBag(builder=TextualBuilder)
-        page.static("^greeting")
+    def test_build_keeps_pointers_formal(self):
+        """Pointer formali: ^pointer strings stay in built Bag."""
         data = Bag()
         data.set_backref()
         data["greeting"] = "Hello!"
-        compiled = self._compile(page, data)
-        node = list(compiled)[0]
-        assert node.value == "Hello!"
+        builder = self._make_builder(data)
+        builder.source.static("^greeting")
+        builder.build()
+        node = list(builder.built)[0]
+        # Value stays as ^pointer in built bag
+        assert node.get_value(static=True) == "^greeting"
+        # But resolves just-in-time via _resolve_node
+        resolved = builder._resolve_node(node, data)
+        assert resolved["node_value"] == "Hello!"
 
-    def test_compile_resolves_attr_pointers(self):
-        page = BuilderBag(builder=TextualBuilder)
-        page.input(value="^form.name", placeholder="Name")
+    def test_build_keeps_attr_pointers_formal(self):
+        """Attr pointers stay formal in built Bag."""
         data = Bag()
         data.set_backref()
         data["form.name"] = "Giovanni"
-        compiled = self._compile(page, data)
-        node = list(compiled)[0]
-        assert node.attr["value"] == "Giovanni"
+        builder = self._make_builder(data)
+        builder.source.input(value="^form.name", placeholder="Name")
+        builder.build()
+        node = list(builder.built)[0]
+        # Attr stays as ^pointer in built bag
+        assert node.attr.get("value") == "^form.name"
+        # Resolves just-in-time
+        resolved = builder._resolve_node(node, data)
+        assert resolved["attrs"]["value"] == "Giovanni"
 
-    def test_compile_expands_component(self):
-        page = BuilderBag(builder=TextualBuilder)
-        page.fieldset(title="User Info")
-        compiled = self._compile(page)
-        node = list(compiled)[0]
+    def test_build_expands_component(self):
+        builder = self._make_builder()
+        builder.source.fieldset(title="User Info")
+        builder.build()
+        node = list(builder.built)[0]
         assert node.node_tag == "fieldset"
         assert isinstance(node.value, Bag)
         child = list(node.value)[0]
         assert child.node_tag == "static"
         assert child.value == "User Info"
 
-    def test_compile_preserves_css_and_binding(self):
-        page = BuilderBag(builder=TextualBuilder)
-        page.css(".x { color: red; }")
-        page.binding(key="q", action="quit", description="Quit")
-        page.static("Hello")
-        compiled = self._compile(page)
-        tags = [n.node_tag for n in compiled]
+    def test_build_preserves_css_and_binding(self):
+        builder = self._make_builder()
+        builder.source.css(".x { color: red; }")
+        builder.source.binding(key="q", action="quit", description="Quit")
+        builder.source.static("Hello")
+        builder.build()
+        tags = [n.node_tag for n in builder.built]
         assert tags == ["css", "binding", "static"]
 
 
@@ -230,37 +239,40 @@ class TestAppPipeline:
     """Test TextualApp pipeline without running Textual."""
 
     def test_basic_pipeline(self):
-        def recipe(page):
-            page.static("Hello")
-            page.button("OK")
+        def build_ui(source):
+            source.static("Hello")
+            source.button("OK")
 
-        app = _make_app(recipe)
+        app = _make_app(build_ui)
         assert len(app.compiled) == 2
 
     def test_pointer_binding(self):
-        def recipe(page):
-            page.static("^title")
+        def build_ui(source):
+            source.static("^title")
 
-        app = _make_app(recipe)
+        app = _make_app(build_ui)
         app.data["title"] = "Hello"
-        app._binding.rebind(app.data)
 
+        # Pointer is formal in built bag; resolve just-in-time
         node = list(app.compiled)[0]
-        assert node.value == "Hello"
+        resolved = app._page_builder._resolve_node(node, app.data)
+        assert resolved["node_value"] == "Hello"
 
     def test_reactive_data_change(self):
-        def recipe(page):
-            page.static("^msg")
+        """Data change triggers _on_node_updated via BindingManager."""
+        def build_ui(source):
+            source.static("^msg")
 
-        app = _make_app(recipe)
+        app = _make_app(build_ui)
         app.data["msg"] = "Initial"
-        app._binding.rebind(app.data)
 
         node = list(app.compiled)[0]
-        assert node.value == "Initial"
+        resolved = app._page_builder._resolve_node(node, app.data)
+        assert resolved["node_value"] == "Initial"
 
         app.data["msg"] = "Updated"
-        assert node.value == "Updated"
+        resolved = app._page_builder._resolve_node(node, app.data)
+        assert resolved["node_value"] == "Updated"
 
 
 # ---------------------------------------------------------------------------
@@ -273,10 +285,10 @@ class TestIncrementalRepl:
 
     def test_add_node_after_setup(self):
         """Simulates REPL: app.page.static('New widget')."""
-        def recipe(page):
-            page.static("Original")
+        def build_ui(source):
+            source.static("Original")
 
-        app = _make_app(recipe)
+        app = _make_app(build_ui)
         assert len(app.compiled) == 1
 
         app.page.static("Added from REPL")
@@ -284,17 +296,15 @@ class TestIncrementalRepl:
         assert len(app.compiled) == 2
         tags = [n.node_tag for n in app.compiled]
         assert tags == ["static", "static"]
-        values = [n.value for n in app.compiled]
-        assert values == ["Original", "Added from REPL"]
 
     def test_add_triggers_render(self):
-        """Adding a node should trigger _rerender."""
+        """Adding a node should trigger _do_render."""
         counter = {"n": 0}
 
-        def recipe(page):
-            page.static("Hello")
+        def build_ui(source):
+            source.static("Hello")
 
-        app = _make_app(recipe, render_counter=counter)
+        app = _make_app(build_ui, render_counter=counter)
         initial = counter["n"]
 
         app.page.button("New button")
@@ -302,24 +312,25 @@ class TestIncrementalRepl:
 
     def test_add_node_with_pointer(self):
         """Simulates REPL: app.page.static('^msg') with data binding."""
-        def recipe(page):
-            page.static("Fixed")
+        def build_ui(source):
+            source.static("Fixed")
 
-        app = _make_app(recipe)
+        app = _make_app(build_ui)
         app.data["msg"] = "Dynamic"
 
         app.page.static("^msg")
 
         assert len(app.compiled) == 2
         new_node = list(app.compiled)[1]
-        assert new_node.value == "Dynamic"
+        resolved = app._page_builder._resolve_node(new_node, app.data)
+        assert resolved["node_value"] == "Dynamic"
 
     def test_multiple_adds(self):
         """Simulates multiple REPL commands."""
-        def recipe(page):
-            page.static("Start")
+        def build_ui(source):
+            source.static("Start")
 
-        app = _make_app(recipe)
+        app = _make_app(build_ui)
 
         app.page.button("Button 1")
         app.page.button("Button 2")

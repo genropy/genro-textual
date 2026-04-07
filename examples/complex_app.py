@@ -17,10 +17,10 @@ from genro_textual import TextualApp
 class Application(TextualApp):
     """Complex application with tabs, forms, and Exit button."""
 
-    def recipe(self, page):
-        page.header(show_clock=True, icon="📦")
+    def main(self, source):
+        source.header(show_clock=True, icon="📦")
 
-        tabs = page.tabbedcontent(initial="dashboard")
+        tabs = source.tabbedcontent(initial="dashboard")
 
         # === Dashboard ===
         dashboard = tabs.tabpane(title="Dashboard", id="dashboard")
@@ -50,6 +50,6 @@ class Application(TextualApp):
         settings.button("Save", variant="primary", id="btn-save")
 
         # === Exit button in footer area ===
-        page.rule()
-        page.button("Exit Application", variant="error", id="btn-exit")
-        page.footer(show_command_palette=True)
+        source.rule()
+        source.button("Exit Application", variant="error", id="btn-exit")
+        source.footer(show_command_palette=True)

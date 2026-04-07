@@ -228,7 +228,7 @@ class RemoteServer:
             self._safe_call(
                 lambda: getattr(self._app.page, method_name)(*args, **kwargs)
             )
-            # Store subscription in BagAppBase handles incremental update:
+            # Source subscription in BuilderManager handles incremental update:
             # _on_store_inserted → materialize → bind → _rerender
             return None
 

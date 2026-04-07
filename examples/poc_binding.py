@@ -11,18 +11,17 @@ from genro_textual import TextualApp
 class Application(TextualApp):
     """Minimal bidirectional binding test."""
 
-    def recipe(self, page):
-        page.binding(key="q", action="quit", description="Quit")
-        page.input(value="^mysample.data.name", placeholder="Name")
-        page.input(value="^mysample.data.surname", placeholder="Surname")
-        page.static("^mysample.data.name")
-        page.static("^mysample.data.surname")
-        page.button("OK")
+    def main(self, source):
+        source.binding(key="q", action="quit", description="Quit")
+        source.input(value="^mysample.data.name", placeholder="Name")
+        source.input(value="^mysample.data.surname", placeholder="Surname")
+        source.static("^mysample.data.name")
+        source.static("^mysample.data.surname")
+        source.button("OK")
 
-    def setup(self):
-        self.data["mysample.data.name"] = "John"
-        self.data["mysample.data.surname"] = "Doe"
-        super().setup()
+    def store(self, data):
+        data["mysample.data.name"] = "John"
+        data["mysample.data.surname"] = "Doe"
 
 
 if __name__ == "__main__":

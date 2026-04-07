@@ -2,7 +2,7 @@
 
 **Declarative Terminal UI framework** built on [Textual](https://textual.textualize.io/) and powered by [genro-builders](https://github.com/genropy/genro-builders).
 
-Define your UI as a "recipe" — widgets, CSS, key bindings, data binding — all as Bag nodes. The compiler transforms the recipe into a live Textual app with reactive data binding.
+Define your UI in a `main()` method — widgets, CSS, key bindings, data binding — all as Bag nodes. The build step transforms the source into a live Textual app with reactive data binding.
 
 **Status: Pre-Alpha** — Active development.
 
@@ -20,16 +20,15 @@ pip install genro-textual
 from genro_textual import TextualApp
 
 class Application(TextualApp):
-    def recipe(self, page):
-        page.binding(key="q", action="quit", description="Quit")
-        page.static("^greeting")
-        page.input(value="^form.name", placeholder="Your name")
-        page.button("OK")
+    def main(self, source):
+        source.binding(key="q", action="quit", description="Quit")
+        source.static("^greeting")
+        source.input(value="^form.name", placeholder="Your name")
+        source.button("OK")
 
-    def setup(self):
-        self.data["greeting"] = "Hello, World!"
-        self.data["form.name"] = ""
-        super().setup()
+    def store(self, data):
+        data["greeting"] = "Hello, World!"
+        data["form.name"] = ""
 
 if __name__ == "__main__":
     Application().run()
@@ -41,14 +40,14 @@ Type a name in the input, press Tab — the greeting doesn't change (it's on a d
 
 genro-textual follows the **puppeteer/puppet** pattern:
 
-- **TextualApp** (the puppeteer) — configures recipe, data, compiler
+- **TextualApp** (the puppeteer) — configures main, data, builder
 - **LiveApp** (the puppet) — a bare `textual.app.App` driven by the puppeteer
-- **CompiledBag** — the script, kept in sync by the BindingManager
+- **Built Bag** — the script, kept in sync by the BindingManager
 
 ```text
-┌──────────────┐     compile     ┌──────────────┐     render     ┌──────────────┐
-│  Source Bag   │ ──────────────► │ Compiled Bag │ ─────────────► │   LiveApp    │
-│  (recipe)     │                 │ (expanded,   │                │  (Textual)   │
+┌──────────────┐      build      ┌──────────────┐     render     ┌──────────────┐
+│  Source Bag   │ ──────────────► │  Built Bag   │ ─────────────► │   LiveApp    │
+│  (main)       │                 │ (expanded,   │                │  (Textual)   │
 │              │                 │  resolved)   │                │              │
 └──────────────┘                 └──────────────┘                └──────────────┘
        ▲                                │                               │
@@ -66,8 +65,8 @@ genro-textual follows the **puppeteer/puppet** pattern:
 Bind widget values to data using `^path` syntax:
 
 ```python
-page.static("^user.name")              # value bound to data path
-page.input(value="^form.email")        # attribute bound to data path
+source.static("^user.name")              # value bound to data path
+source.input(value="^form.email")        # attribute bound to data path
 ```
 
 When `data["user.name"]` changes, the Static updates automatically.
@@ -83,28 +82,27 @@ The `_reason` mechanism prevents infinite loops: when a widget writes to data, t
 
 ```python
 class Application(TextualApp):
-    def recipe(self, page):
-        page.binding(key="q", action="quit", description="Quit")
-        page.input(value="^form.name", placeholder="Name")
-        page.input(value="^form.surname", placeholder="Surname")
-        page.static("^form.name")       # updates when Input blurs
-        page.static("^form.surname")
-        page.button("OK")
+    def main(self, source):
+        source.binding(key="q", action="quit", description="Quit")
+        source.input(value="^form.name", placeholder="Name")
+        source.input(value="^form.surname", placeholder="Surname")
+        source.static("^form.name")       # updates when Input blurs
+        source.static("^form.surname")
+        source.button("OK")
 
-    def setup(self):
-        self.data["form.name"] = "John"
-        self.data["form.surname"] = "Doe"
-        super().setup()
+    def store(self, data):
+        data["form.name"] = "John"
+        data["form.surname"] = "Doe"
 ```
 
 ## CSS
 
 ### Inline Stylesheets
 
-CSS in the recipe, with Textual theme variables:
+CSS in the main method, with Textual theme variables:
 
 ```python
-page.css("""
+source.css("""
     .title { color: green; text-style: bold; }
     #sidebar { width: 30; background: $surface; border-left: solid $primary; }
 """)
@@ -115,7 +113,7 @@ page.css("""
 CSS properties can be set directly on widgets and bound to data:
 
 ```python
-page.vertical(id="panel", width="^_system.panel.width", display="^_system.panel.display")
+source.vertical(id="panel", width="^_system.panel.width", display="^_system.panel.display")
 ```
 
 When `data["_system.panel.width"]` changes, the widget resizes. Style attributes are classified automatically at mount time:
@@ -124,16 +122,16 @@ When `data["_system.panel.width"]` changes, the widget resizes. Style attributes
 2. CSS properties → `widget.styles`
 3. Reactive attributes → `widget.set_reactive`
 
-Note: CSS variables (`$surface`, `$primary`) work only in `page.css()`, not in direct attributes.
+Note: CSS variables (`$surface`, `$primary`) work only in `source.css()`, not in direct attributes.
 
 ## App Shell
 
-The `app_shell` component provides a complete application layout with header, scrollable content area, resizable inspector drawer (Data/Source/Compiled tree tabs), and footer:
+The `app_shell` component provides a complete application layout with header, scrollable content area, resizable inspector drawer (Data/Source/Built tree tabs), and footer:
 
 ```python
 class Application(TextualApp):
-    def recipe(self, page):
-        shell = page.app_shell(
+    def main(self, source):
+        shell = source.app_shell(
             title="My App",
             data_store=self.data,
             source_store=self.source,
@@ -142,10 +140,9 @@ class Application(TextualApp):
         shell.content.static("Hello!")
         shell.content.input(value="^form.name", placeholder="Name")
 
-    def setup(self):
+    def store(self, data):
         self._init_shell_data()
-        self.data["form.name"] = "John"
-        super().setup()
+        data["form.name"] = "John"
 ```
 
 The `content` slot is a named insertion point — widgets added to `shell.content` are mounted inside the scrollable content area. Press **F12** to toggle the inspector drawer.
@@ -155,8 +152,8 @@ The `content` slot is a named insertion point — widgets added to `shell.conten
 ## Key Bindings
 
 ```python
-page.binding(key="q", action="quit", description="Quit")
-page.binding(key="f12", action="toggle_drawer", description="Inspector")
+source.binding(key="q", action="quit", description="Quit")
+source.binding(key="f12", action="toggle_drawer", description="Inspector")
 ```
 
 Bindings appear in the Footer and are clickable.
@@ -185,8 +182,8 @@ class MyBuilder(MyMixin, TextualBuilder):
 class Application(TextualApp):
     builder_class = MyBuilder
 
-    def recipe(self, page):
-        page.login_form(title="Sign In")
+    def main(self, source):
+        source.login_form(title="Sign In")
 ```
 
 ### Component with named slots
@@ -207,16 +204,16 @@ class MyBuilder(DashboardMixin, TextualBuilder):
     pass
 ```
 
-Usage in recipe:
+Usage in main:
 
 ```python
-def recipe(self, page):
-    dash = page.dashboard(title="Overview")
+def main(self, source):
+    dash = source.dashboard(title="Overview")
     dash.left.tree(label="nav", store=self.data)
     dash.right.static("Main content")
 ```
 
-The handler body returns a dict mapping slot names to destination nodes. Content added to slots at recipe time is mounted into those nodes at compile time.
+The handler body returns a dict mapping slot names to destination nodes. Content added to slots at main time is mounted into those nodes at build time.
 
 ## Live REPL
 
