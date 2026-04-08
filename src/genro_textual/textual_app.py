@@ -289,8 +289,8 @@ class TextualApp(BuilderManager):
 
         css_properties = RulesMap.__annotations__
 
-        # Resolve pointer formali
-        resolved = self._page_builder._resolve_node(node, self._page_builder.data)
+        # Resolve pointer formali via node method
+        resolved = node.evaluate_on_node(self._page_builder.data)
         value = resolved["node_value"]
         attrs = resolved["attrs"]
 
