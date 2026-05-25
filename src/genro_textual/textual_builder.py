@@ -14,9 +14,7 @@ No rendering logic here — that belongs in TextualCompiler.
 
 from __future__ import annotations
 
-from genro_builders.builder import BagBuilderBase, component, element
-
-from genro_textual.components.foundation import FoundationMixin
+from genro_builders.builder import BagBuilderBase, element
 
 
 class TextualWidgetsMixin:
@@ -605,44 +603,10 @@ class TextualWidgetsMixin:
         """Key binding: maps a key press to an action method."""
         ...
 
-    # -------------------------------------------------------------------------
-    # Components (composite elements expanded at compile time)
-    # -------------------------------------------------------------------------
-
-    @component(sub_tags="")
-    def fieldset(self, comp, title="", **kwargs):
-        """A group of input fields with a title. Closed: returns parent for chaining."""
-        if title:
-            comp.static(title)
-
-    @component(sub_tags="*")
-    def form(self, comp, title="", **kwargs):
-        """A form container. Open: returns internal bag for adding fields."""
-        if title:
-            comp.static(title)
-
-
-class TextualBuilder(FoundationMixin, TextualWidgetsMixin, BagBuilderBase):
+class TextualBuilder(TextualWidgetsMixin, BagBuilderBase):
     """Builder for Textual TUI elements.
 
-    Includes FoundationMixin (app_shell) and TextualWidgetsMixin (all widgets).
-    Subclass TextualBuilder freely — mixin schemas are inherited via MRO.
-
-    To add custom components, define them in a mixin::
-
-        from genro_builders.builder import component
-
-        class MyMixin:
-            @component(sub_tags="")
-            def login_form(self, comp, **kwargs):
-                comp.input(placeholder="Username")
-                comp.button("Login")
-
-        class MyBuilder(MyMixin, TextualBuilder):
-            pass
-
-    To exclude FoundationMixin, compose your own builder::
-
-        class MinimalBuilder(TextualWidgetsMixin, BagBuilderBase):
-            pass
+    Grammar-only. Rendering lives on TextualRenderer, registered under
+    the ``"textual"`` mode (decision 6+8 v0.4.0). Subclass freely —
+    mixin schemas are inherited via MRO.
     """
