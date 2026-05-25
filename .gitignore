@@ -31,3 +31,6 @@ htmlcov/
 # ruff
 .ruff_cache/
 docs/_build/
+
+# Temporary working files (subtask workspaces, archived examples)
+temp/
