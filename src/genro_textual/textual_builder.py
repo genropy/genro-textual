@@ -16,7 +16,7 @@ from genro_textual.textual_renderer import TextualRenderer
 
 
 class TextualWidgetsMixin:
-    """All Textual widget @element and @component definitions.
+    """All Textual widget @element definitions.
 
     Defined as a mixin so that subclasses of TextualBuilder
     automatically inherit the full schema via MRO.
