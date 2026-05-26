@@ -5,16 +5,21 @@ Renderer for the ``"textual"`` mode on TextualBuilder. Side-effect-only:
 walks the source bag and mounts widgets on a LiveApp target, returns
 None. Aligned with genro-builders v0.4.0 RendererBase contract.
 
-Dispatch:
-    1. ``_render_<tag>`` method for special widgets (static, tree,
-       datatable, tabbedcontent, tabpane);
-    2. ``_render_default`` for the rest, reading the Textual class to
-       instantiate from each element's ``_meta`` (compile_module +
-       compile_class).
+Strategy: bottom-up assembly. For each source node the renderer builds
+a standalone Textual widget *including its children* (passed as
+``*children`` to the widget constructor), then the top-level widgets
+are mounted on ``target.root`` in a single pass. This avoids races
+where ``add_pane`` or ``mount`` is called on a container whose
+internal compose has not yet run (TabbedContent is the typical case).
 
-Each rendered node stores back-reference ``widget._bag_node = node`` so
-that Textual event handlers on the LiveApp can identify the source node
-that produced a widget.
+Dispatch is by ``_build_widget_<tag>`` for special widgets (static,
+tree, datatable, tabbedcontent, tabpane) and ``_build_widget_default``
+for the rest, reading the Textual class to instantiate from each
+element's ``_meta`` (compile_module + compile_class).
+
+Each built widget stores back-reference ``widget._bag_node = node`` so
+that Textual event handlers on the LiveApp can identify the source
+node that produced a widget.
 """
 from __future__ import annotations
 
@@ -57,9 +62,11 @@ class TextualRenderer(RendererBase):
     ) -> None:
         """Mount widgets from source onto render_target (a LiveApp).
 
-        Walks the source bag in three phases:
-            1. extract ``css`` and ``binding`` nodes recursively;
-            2. mount remaining nodes as widgets under ``render_target.root``;
+        Three phases:
+            1. extract css and binding nodes recursively;
+            2. build the widget for each top-level source node
+               (children included via constructor) and mount it on
+               ``render_target.root``;
             3. apply collected CSS on the LiveApp stylesheet.
 
         Returns None: side-effect-only on the live target.
@@ -69,7 +76,9 @@ class TextualRenderer(RendererBase):
         css_parts: list[str] = []
         self._extract_config(source, css_parts, render_target)
         for node in source:
-            self._mount_widget(node, render_target.root)
+            widget = self._build_widget(node)
+            if widget is not None:
+                render_target.root.mount(widget)
         if css_parts:
             render_target.stylesheet.add_source("\n".join(css_parts))
             render_target.stylesheet.reparse()
@@ -101,35 +110,39 @@ class TextualRenderer(RendererBase):
                 self._extract_config(node.value, css_parts, target)
 
     # ------------------------------------------------------------------
-    # Node rendering dispatch
+    # Build dispatch
     # ------------------------------------------------------------------
 
-    def _mount_widget(self, node: BagNode, parent_widget: Widget) -> None:
-        """Create the Textual widget for ``node`` and mount it on parent.
+    def _build_widget(self, node: BagNode) -> Widget | None:
+        """Return a standalone widget for ``node`` (children inside).
 
-        Dispatch by tag (``_mount_widget_<tag>`` for special widgets,
-        ``_mount_widget_default`` otherwise), then recurse on children.
-        Skips css and binding nodes — extracted by ``_extract_config``
-        and applied to the LiveApp.
+        Dispatch by tag (``_build_widget_<tag>`` for special widgets,
+        ``_build_widget_default`` otherwise). Returns None for nodes
+        that should not produce a widget (css, binding, unknown tags
+        without ``compile_class``).
         """
         tag = node.node_tag or "static"
         if tag in ("css", "binding"):
-            return
-        mount_method = getattr(self, f"_mount_widget_{tag}", None)
-        if mount_method:
-            mount_method(node, parent_widget)
-            return
-        self._mount_widget_default(node, parent_widget)
+            return None
+        build_method = getattr(self, f"_build_widget_{tag}", None)
+        if build_method:
+            return build_method(node)
+        return self._build_widget_default(node)
 
-    def _mount_widget_default(
-        self, node: BagNode, parent_widget: Widget,
-    ) -> None:
-        """Generic case: read class from ``_meta``, instantiate, mount."""
+    def _build_widget_default(self, node: BagNode) -> Widget | None:
+        """Generic case: read class from ``_meta``, instantiate.
+
+        If the widget class accepts ``*children`` (a container), the
+        widgets built from ``node.value`` children are passed as
+        positional args to the constructor. Otherwise the node value is
+        used as the first positional arg (typical for leaf widgets like
+        Static, Button).
+        """
         tag = node.node_tag or "static"
         meta = self._get_meta(tag)
         class_name = meta.get("compile_class")
         if class_name is None:
-            return
+            return None
         module_name = meta.get("compile_module", "textual.widgets")
         module = import_module(module_name)
         textual_class = getattr(module, class_name)
@@ -141,29 +154,41 @@ class TextualRenderer(RendererBase):
         if "id" not in init_kwargs:
             init_kwargs["id"] = f"{tag}_{self.widget_counter}"
 
-        has_children = isinstance(node.value, Bag)
-        content = "" if has_children else (node.value or "")
-        first_param = self._first_positional_param(textual_class.__init__)
-        if content and first_param and first_param not in init_kwargs:
-            init_kwargs[first_param] = content
+        children = self._build_children(node) if isinstance(node.value, Bag) else []
+        accepts_children = self._accepts_var_positional(textual_class)
 
-        widget = textual_class(**init_kwargs)
+        if accepts_children:
+            widget = textual_class(*children, **init_kwargs)
+        else:
+            # Leaf widget: use node.value as the first positional arg.
+            content = "" if isinstance(node.value, Bag) else (node.value or "")
+            first_param = self._first_positional_param(textual_class.__init__)
+            if content and first_param and first_param not in init_kwargs:
+                init_kwargs[first_param] = content
+            widget = textual_class(**init_kwargs)
+
         self._apply_styles(widget, style_attrs)
         self._apply_reactive(widget, reactive_attrs)
-        self._attach_widget(node, widget, parent_widget)
+        widget._bag_node = node  # type: ignore[attr-defined]
+        return widget
 
-        if has_children:
-            for child_node in node.value:
-                self._mount_widget(child_node, widget)
+    def _build_children(self, node: BagNode) -> list[Widget]:
+        """Build the widgets for all children of a container node."""
+        result: list[Widget] = []
+        if not isinstance(node.value, Bag):
+            return result
+        for child_node in node.value:
+            child_widget = self._build_widget(child_node)
+            if child_widget is not None:
+                result.append(child_widget)
+        return result
 
     # ------------------------------------------------------------------
-    # Special renderers
+    # Special builders
     # ------------------------------------------------------------------
 
-    def _mount_widget_static(
-        self, node: BagNode, parent_widget: Widget,
-    ) -> None:
-        """Static text widget."""
+    def _build_widget_static(self, node: BagNode) -> Widget:
+        """Static text widget (leaf)."""
         from textual.widgets import Static
 
         attrs = {k: v for k, v in node.attr.items() if not k.startswith("_")}
@@ -171,12 +196,18 @@ class TextualRenderer(RendererBase):
         if "id" not in attrs:
             attrs["id"] = f"static_{self.widget_counter}"
         widget = Static(content, **attrs)
-        self._attach_widget(node, widget, parent_widget)
+        widget._bag_node = node  # type: ignore[attr-defined]
+        return widget
 
-    def _mount_widget_tabbedcontent(
-        self, node: BagNode, parent_widget: Widget,
-    ) -> None:
-        """TabbedContent: children go via add_pane(), not mount()."""
+    def _build_widget_tabbedcontent(self, node: BagNode) -> Widget:
+        """TabbedContent populated via compose_add_child (the same hook
+        Textual's own ``with TabbedContent(): yield ...`` syntax uses).
+
+        TabbedContent's constructor expects string titles, not TabPane
+        widgets. The idiomatic way to register TabPane children before
+        mount is via ``compose_add_child`` — the same hook Textual
+        invokes when the context-manager syntax yields a child.
+        """
         from textual.widgets import TabbedContent
 
         attrs = {k: v for k, v in node.attr.items() if not k.startswith("_")}
@@ -184,25 +215,22 @@ class TextualRenderer(RendererBase):
         kwargs = self._filter_kwargs_for_signature(attrs, TabbedContent.__init__)
         if "id" not in kwargs:
             kwargs["id"] = f"tabbedcontent_{self.widget_counter}"
+
         widget = TabbedContent(**kwargs)
-        self._attach_widget(node, widget, parent_widget)
+        widget._bag_node = node  # type: ignore[attr-defined]
 
-        first_pane_id: str | None = None
-        if isinstance(node.value, Bag):
-            for child_node in node.value:
-                self._mount_widget_tabpane(child_node, widget)
-                if first_pane_id is None:
-                    w = getattr(child_node, "_textual_widget", None)
-                    first_pane_id = w.id if w else None
+        panes = self._build_children(node)
+        for pane in panes:
+            widget.compose_add_child(pane)
 
+        first_pane_id = panes[0].id if panes else None
         target_id = initial or first_pane_id
         if target_id:
             widget.call_after_refresh(setattr, widget, "active", target_id)
+        return widget
 
-    def _mount_widget_tabpane(
-        self, node: BagNode, tabbed_content: Any,
-    ) -> None:
-        """TabPane added to TabbedContent via add_pane()."""
+    def _build_widget_tabpane(self, node: BagNode) -> Widget:
+        """TabPane built with its children as compose args."""
         from textual.widgets import TabPane
 
         attrs = {k: v for k, v in node.attr.items() if not k.startswith("_")}
@@ -210,20 +238,12 @@ class TextualRenderer(RendererBase):
         kwargs = self._filter_kwargs_for_signature(attrs, TabPane.__init__)
         if "id" not in kwargs:
             kwargs["id"] = f"tabpane_{self.widget_counter}"
-        widget = TabPane(title, **kwargs)
-        # Stash the widget on the node so the parent TabbedContent can
-        # read it back to compute the initial active pane.
-        node._textual_widget = widget  # type: ignore[attr-defined]
+        children = self._build_children(node)
+        widget = TabPane(title, *children, **kwargs)
         widget._bag_node = node  # type: ignore[attr-defined]
-        tabbed_content.add_pane(widget)
+        return widget
 
-        if isinstance(node.value, Bag):
-            for child_node in node.value:
-                self._mount_widget(child_node, widget)
-
-    def _mount_widget_tree(
-        self, node: BagNode, parent_widget: Widget,
-    ) -> None:
+    def _build_widget_tree(self, node: BagNode) -> Widget:
         """Tree widget: optionally populated from a Bag passed via ``store``."""
         from textual.widgets import Tree
 
@@ -234,10 +254,20 @@ class TextualRenderer(RendererBase):
         if "id" not in kwargs:
             kwargs["id"] = f"tree_{self.widget_counter}"
         widget = Tree(label, **kwargs)
-        self._attach_widget(node, widget, parent_widget)
+        widget._bag_node = node  # type: ignore[attr-defined]
         if isinstance(store, Bag):
-            self._populate_tree_from_bag(widget.root, store)
-            widget.set_timer(0.1, widget.refresh)
+            # Tree population must happen after the Tree is mounted (its
+            # root TreeNode is only valid then). Defer via
+            # call_after_refresh — Textual's idiomatic post-mount hook.
+            widget.call_after_refresh(
+                lambda w=widget, s=store: self._populate_tree(w, s),
+            )
+        return widget
+
+    def _populate_tree(self, widget: Any, store: Bag) -> None:
+        """Populate a Tree widget from a Bag (called post-mount)."""
+        self._populate_tree_from_bag(widget.root, store)
+        widget.refresh()
 
     def _populate_tree_from_bag(self, tree_node: Any, bag: Bag) -> None:
         """Recursively populate a TreeNode from a Bag."""
@@ -255,10 +285,14 @@ class TextualRenderer(RendererBase):
                 display = f"{label}: {value}" if value is not None else label
                 tree_node.add_leaf(display, data=bag_node)
 
-    def _mount_widget_datatable(
-        self, node: BagNode, parent_widget: Widget,
-    ) -> None:
-        """DataTable: columns and rows via add_column/add_row."""
+    def _build_widget_datatable(self, node: BagNode) -> Widget:
+        """DataTable: columns and rows populated post-mount.
+
+        DataTable's add_column/add_row require the widget to be mounted
+        (it allocates internal storage on mount). We defer the
+        population via call_after_refresh, Textual's idiomatic
+        post-mount hook.
+        """
         from textual.widgets import DataTable
 
         attrs = {k: v for k, v in node.attr.items() if not k.startswith("_")}
@@ -266,11 +300,22 @@ class TextualRenderer(RendererBase):
         if "id" not in kwargs:
             kwargs["id"] = f"datatable_{self.widget_counter}"
         widget = DataTable(**kwargs)
-        self._attach_widget(node, widget, parent_widget)
+        widget._bag_node = node  # type: ignore[attr-defined]
 
-        if not isinstance(node.value, Bag):
-            return
-        for child_node in node.value:
+        if isinstance(node.value, Bag):
+            children_snapshot = list(node.value)
+            widget.call_after_refresh(
+                lambda w=widget, kids=children_snapshot: self._populate_datatable(
+                    w, kids,
+                ),
+            )
+        return widget
+
+    def _populate_datatable(
+        self, widget: Any, children: list[BagNode],
+    ) -> None:
+        """Populate a DataTable from its column/row child nodes."""
+        for child_node in children:
             child_attrs = {
                 k: v for k, v in child_node.attr.items()
                 if not k.startswith("_")
@@ -293,17 +338,6 @@ class TextualRenderer(RendererBase):
                     child_attrs, widget.add_row,
                 )
                 widget.add_row(*cells, **row_kwargs)
-
-    # ------------------------------------------------------------------
-    # Attach to the live tree
-    # ------------------------------------------------------------------
-
-    def _attach_widget(
-        self, node: BagNode, widget: Widget, parent_widget: Widget,
-    ) -> None:
-        """Mount widget on parent; keep back-reference widget -> node."""
-        widget._bag_node = node  # type: ignore[attr-defined]
-        parent_widget.mount(widget)
 
     # ------------------------------------------------------------------
     # Schema / meta helpers
@@ -367,6 +401,14 @@ class TextualRenderer(RendererBase):
         sig = inspect.signature(textual_class.__init__)
         return any(
             p.kind == inspect.Parameter.VAR_KEYWORD
+            for p in sig.parameters.values()
+        )
+
+    def _accepts_var_positional(self, textual_class: type) -> bool:
+        """Check if __init__ accepts *args (container that takes children)."""
+        sig = inspect.signature(textual_class.__init__)
+        return any(
+            p.kind == inspect.Parameter.VAR_POSITIONAL
             for p in sig.parameters.values()
         )
 
