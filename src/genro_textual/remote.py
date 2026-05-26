@@ -228,8 +228,11 @@ class RemoteServer:
             self._safe_call(
                 lambda: getattr(self._app.page, method_name)(*args, **kwargs)
             )
-            # Source subscription in BuilderManager handles incremental update:
-            # _on_store_inserted → materialize → bind → _rerender
+            # Phase A: the call mutates the source bag but no re-render
+            # is triggered (the reactivity layer is gone). Widgets added
+            # remotely will not appear in the live app until a full
+            # re-render is requested. Incremental update will return in
+            # Phase B/C when data_binding lands in genro-builders.
             return None
 
         if cmd_type == "__quit__":
