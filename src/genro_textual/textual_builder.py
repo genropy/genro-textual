@@ -1,20 +1,18 @@
 # Copyright 2025 Softwell S.r.l. - SPDX-License-Identifier: Apache-2.0
-"""TextualBuilder - Builder for Textual TUI widgets.
+"""TextualBuilder - grammar for Textual TUI widgets.
 
-Elements and components are defined in mixins so that subclasses of
-TextualBuilder inherit the full schema. This follows the genro-builders
-mixin pattern: _pop_decorated_methods collects decorators from mixin
-bases (non-BagBuilderBase) in the MRO.
-
-Component mixins live in genro_textual.components — each file is
-a mixin that can be included or excluded when composing a builder.
-
-No rendering logic here — that belongs in TextualCompiler.
+Grammar-only (decision 8 v0.4.0). Elements are declared via @element
+in TextualWidgetsMixin so subclasses inherit the full schema via MRO.
+Rendering lives on TextualRenderer, registered under the ``"textual"``
+mode in __init__. The ``"xml"`` mode is inherited from BagBuilderBase
+and can be used for debug/test/snapshot without a live Textual target.
 """
 
 from __future__ import annotations
 
 from genro_builders.builder import BagBuilderBase, element
+
+from genro_textual.textual_renderer import TextualRenderer
 
 
 class TextualWidgetsMixin:
@@ -607,6 +605,14 @@ class TextualBuilder(TextualWidgetsMixin, BagBuilderBase):
     """Builder for Textual TUI elements.
 
     Grammar-only. Rendering lives on TextualRenderer, registered under
-    the ``"textual"`` mode (decision 6+8 v0.4.0). Subclass freely —
-    mixin schemas are inherited via MRO.
+    the ``"textual"`` mode (decision 6+8 v0.4.0). The ``"xml"`` mode is
+    inherited from BagBuilderBase. Subclass freely — mixin schemas are
+    inherited via MRO.
     """
+
+    _name = "textual"
+    _default_render_mode = "textual"
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_renderer("textual", TextualRenderer)
