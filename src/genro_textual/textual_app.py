@@ -37,7 +37,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from genro_builders.builder_handler import BuilderHandler
+from genro_builders.builder.handler import BuilderHandler
 from textual.app import App
 from textual.containers import Vertical
 from textual.widgets import Button

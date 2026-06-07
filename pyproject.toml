@@ -21,8 +21,9 @@ classifiers = [
     "Environment :: Console",
 ]
 dependencies = [
-    "genro-bag>=0.11.0",
-    "genro-builders>=0.14.0",
+    "genro-bag>=0.18.5",
+    "genro-builders>=0.18.0",
+    "genro-toolbox>=0.6.1",
     "textual>=0.47.0",
     "watchfiles>=0.21.0",
 ]

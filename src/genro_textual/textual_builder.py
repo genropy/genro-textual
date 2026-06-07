@@ -3,14 +3,14 @@
 
 Grammar-only (decision 8 v0.4.0). Elements are declared via @element
 in TextualWidgetsMixin so subclasses inherit the full schema via MRO.
-Rendering lives on TextualRenderer, registered under the ``"textual"``
-mode in __init__. The ``"xml"`` mode is inherited from BagBuilderBase
-and can be used for debug/test/snapshot without a live Textual target.
+Rendering lives on TextualRenderer, exposed via the ``renderer_textual``
+property. The ``"xml"`` mode is inherited from BuilderBase and can be
+used for debug/test/snapshot without a live Textual target.
 """
 
 from __future__ import annotations
 
-from genro_builders.builder import BagBuilderBase, element
+from genro_builders.builder import BuilderBase, element
 
 from genro_textual.textual_renderer import TextualRenderer
 
@@ -601,18 +601,19 @@ class TextualWidgetsMixin:
         """Key binding: maps a key press to an action method."""
         ...
 
-class TextualBuilder(TextualWidgetsMixin, BagBuilderBase):
+class TextualBuilder(TextualWidgetsMixin, BuilderBase):
     """Builder for Textual TUI elements.
 
-    Grammar-only. Rendering lives on TextualRenderer, registered under
-    the ``"textual"`` mode (decision 6+8 v0.4.0). The ``"xml"`` mode is
-    inherited from BagBuilderBase. Subclass freely — mixin schemas are
-    inherited via MRO.
+    Grammar-only. Rendering lives on TextualRenderer, exposed via the
+    ``renderer_textual`` property (the core resolves it through
+    ``get_render``). The ``"xml"`` mode is inherited from BuilderBase.
+    Subclass freely — mixin schemas are inherited via MRO.
     """
 
     _name = "textual"
     _default_render_mode = "textual"
 
-    def __init__(self) -> None:
-        super().__init__()
-        self.register_renderer("textual", TextualRenderer)
+    @property
+    def renderer_textual(self) -> TextualRenderer:
+        """Fresh TextualRenderer instance bound to this builder."""
+        return TextualRenderer(builder=self)
